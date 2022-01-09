@@ -1,9 +1,9 @@
 use actix_web::dev::Server;
-use actix_web::{web, App, HttpResponse, HttpServer};
+use actix_web::{web, App, HttpResponse, HttpServer, Responder};
 use std::net::TcpListener;
 
-async fn health_check() -> HttpResponse {
-    HttpResponse::Ok().finish()
+async fn health_check() -> impl Responder {
+    HttpResponse::Ok().body("A - OK")
 }
 
 #[derive(serde::Deserialize)]
@@ -12,8 +12,9 @@ struct FormData {
     name: String,
 }
 
-async fn subscribe(form: web::Form<FormData>) -> HttpResponse {
-    HttpResponse::Ok().finish()
+async fn subscribe(form: web::Form<FormData>) -> impl Responder {
+    let hello = format!("Hello {name}", name = form.name);
+    HttpResponse::Ok().body(hello)
 }
 
 pub fn run(listener: TcpListener) -> Result<Server, std::io::Error> {

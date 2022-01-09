@@ -10,8 +10,10 @@ fn spawn_app() -> String {
     // We return the application address to the caller!
     format!("http://127.0.0.1:{}", port)
 }
-
-#[actix_rt::test]
+//`tokio::test` is the testing equivalent of `tokio::main`.
+// It also spares you from having to specify the `#[test]` attribute.
+// To see how it works, run `cargo expand --test health_check`
+#[tokio::test]
 async fn health_check_works() {
     // Arrange
     let address = spawn_app();
@@ -27,10 +29,10 @@ async fn health_check_works() {
 
     // Assert
     assert!(response.status().is_success());
-    assert_eq!(Some(0), response.content_length());
+    assert_eq!(Some("A - OK".len() as u64), response.content_length());
 }
 
-#[actix_rt::test]
+#[tokio::test]
 async fn subscribe_returns_200_for_valid_form_data() {
     let address = spawn_app();
     let client = reqwest::Client::new();
@@ -47,7 +49,7 @@ async fn subscribe_returns_200_for_valid_form_data() {
     assert_eq!(200, response.status().as_u16());
 }
 
-#[actix_rt::test]
+#[tokio::test]
 async fn subscribe_returns_400_when_missing_data() {
     let address = spawn_app();
     let client = reqwest::Client::new();
