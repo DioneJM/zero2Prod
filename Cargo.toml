@@ -16,5 +16,18 @@ actix-web = "=4.0.0-beta.19"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 serde = "1.0.115"
 
+# Using table-like toml syntax to avoid a super-long line!
+[dependencies.sqlx]
+version = "0.5.7"
+default-features = false
+features = [
+    "runtime-actix-rustls", # Use actix as runtime for future w/ TLS backend
+    "macros", # query! and query_as! macros
+    "postgres", # provides postgres specific functionality
+    "uuid", # support for mapping SQL UUIDs with type Uuid from uuid crate
+    "chrono", # allows SQL timestamptz to be used with DateTime<T> from `chrono` crate
+    "migrate" # be able to manage migrations programmatically
+]
+
 [dev-dependencies]
 reqwest = { version = "0.11", features = ["json"] }
