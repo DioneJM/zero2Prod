@@ -1,30 +1,52 @@
 use std::net::TcpListener;
-use zero2prod::startup::run;
+use zero2prod::startup::{run, DbConnectionKind};
 use zero2prod::configuration::get_configuration;
-use sqlx::{PgConnection, Connection};
+use sqlx::{PgConnection, Connection, PgPool};
 
-fn spawn_app() -> String {
-    let listener = TcpListener::bind("127.0.0.1:0").expect("Failed to bind random port");
+pub struct TestApp {
+    pub address: String,
+    pub connection: DbConnectionKind
+}
+
+async fn spawn_app() -> TestApp {
+    let config = get_configuration()
+        .expect("Failed to read config file");
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .expect("Failed to bind random port");
     // We retrieve the port assigned to us by the OS
-    let port = listener.local_addr().unwrap().port();
-    let server = run(listener).expect("Failed to bind address");
+    let port = listener.local_addr()
+        .unwrap()
+        .port();
+    let db_connection_pool: DbConnectionKind = PgPool::connect(
+        &config.database.connection_string())
+        .await
+        .expect("Failed to connect to DB");
+
+    let server = run(
+        listener,
+        db_connection_pool.clone())
+        .expect("Failed to bind address");
     let _ = tokio::spawn(server);
     // We return the application address to the caller!
-    format!("http://127.0.0.1:{}", port)
+    TestApp {
+        address: format!("http://127.0.0.1:{}", port),
+        connection: db_connection_pool
+    }
 }
+
 //`tokio::test` is the testing equivalent of `tokio::main`.
 // It also spares you from having to specify the `#[test]` attribute.
 // To see how it works, run `cargo expand --test health_check`
 #[tokio::test]
 async fn health_check_works() {
     // Arrange
-    let address = spawn_app();
+    let app = spawn_app().await;
     let client = reqwest::Client::new();
 
     // Act
     let response = client
         // Use the returned application address
-        .get(&format!("{}/health", &address))
+        .get(&format!("{}/health", &app.address))
         .send()
         .await
         .expect("Failed to execute request.");
@@ -36,18 +58,15 @@ async fn health_check_works() {
 
 #[tokio::test]
 async fn subscribe_returns_200_for_valid_form_data() {
-    let address = spawn_app();
-    let configuration = get_configuration().expect("Failed to get configuration");
-    let db_connection_string = configuration.database.connection_string();
-    let connection = PgConnection::connect(&db_connection_string)
-        .await
-        .expect("Failed to connect to DB");
+    let app = spawn_app().await;
 
     let client = reqwest::Client::new();
-    let body = "name=Dione%20Morales&email=dionemorales@outlook.com";
+    let name = "Dione";
+    let email = "dionemorales@outlook.com";
+    let body = format!("name={name}&email={email}", name = name, email = email);
 
     let response = client
-        .post(&format!("{}/subscriptions", &address))
+        .post(&format!("{}/subscriptions", &app.address))
         .header("Content-Type", "application/x-www-form-urlencoded")
         .body(body)
         .send()
@@ -55,11 +74,19 @@ async fn subscribe_returns_200_for_valid_form_data() {
         .expect("Failed to submit subscription information");
 
     assert_eq!(200, response.status().as_u16());
+
+    let saved = sqlx::query!("SELECT email, name FROM subscriptions")
+        .fetch_one(&app.connection)
+        .await
+        .expect("Failed to fetch saved subscription");
+
+    assert_eq!(saved.name, name);
+    assert_eq!(saved.email, email);
 }
 
 #[tokio::test]
 async fn subscribe_returns_400_when_missing_data() {
-    let address = spawn_app();
+    let app = spawn_app().await;
     let client = reqwest::Client::new();
     let test_cases = vec![
         ("name=Dione", "missing the email"),
@@ -69,7 +96,7 @@ async fn subscribe_returns_400_when_missing_data() {
 
     for (invalid_body, error_message) in test_cases {
         let response = client
-            .post(&format!("{}/subscriptions", &address))
+            .post(&format!("{}/subscriptions", &app.address))
             .header("Content-Type", "applications/x-www-form-urlencoded")
             .body(invalid_body)
             .send()
