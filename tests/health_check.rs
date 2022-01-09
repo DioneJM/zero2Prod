@@ -54,7 +54,7 @@ async fn subscribe_returns_400_when_missing_data() {
     let test_cases = vec![
         ("name=Dione", "missing the email"),
         ("email=dionemorales@outlook.com", "missing name"),
-        ("", "missing name and email")
+        ("", "missing name and email"),
     ];
 
     for (invalid_body, error_message) in test_cases {
@@ -73,5 +73,4 @@ async fn subscribe_returns_400_when_missing_data() {
             error_message
         )
     }
-
 }
