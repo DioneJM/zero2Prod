@@ -1,7 +1,8 @@
 use std::net::TcpListener;
 use zero2prod::startup::{run, DbConnectionKind};
-use zero2prod::configuration::get_configuration;
-use sqlx::{PgConnection, Connection, PgPool};
+use zero2prod::configuration::{get_configuration, DatabaseSettings};
+use sqlx::{PgConnection, Connection, PgPool, Executor};
+use uuid::Uuid;
 
 pub struct TestApp {
     pub address: String,
@@ -9,18 +10,17 @@ pub struct TestApp {
 }
 
 async fn spawn_app() -> TestApp {
-    let config = get_configuration()
+    let mut config = get_configuration()
         .expect("Failed to read config file");
+
+    config.database.database_name = Uuid::new_v4().to_string();
     let listener = TcpListener::bind("127.0.0.1:0")
         .expect("Failed to bind random port");
     // We retrieve the port assigned to us by the OS
     let port = listener.local_addr()
         .unwrap()
         .port();
-    let db_connection_pool: DbConnectionKind = PgPool::connect(
-        &config.database.connection_string())
-        .await
-        .expect("Failed to connect to DB");
+    let db_connection_pool: DbConnectionKind = configure_database(&config.database).await;
 
     let server = run(
         listener,
@@ -32,6 +32,32 @@ async fn spawn_app() -> TestApp {
         address: format!("http://127.0.0.1:{}", port),
         connection: db_connection_pool
     }
+}
+
+pub async fn configure_database(config: &DatabaseSettings) -> DbConnectionKind {
+    let mut connection = PgConnection::connect(&config.connection_string_without_db_name())
+        .await
+        .expect("Failed to connect to DB")
+        .execute(format!(
+            r#"
+            CREATE DATABASE "{db_name}";
+            "#,
+            db_name = config.database_name
+        ).as_str())
+        .await
+        .expect("Failed to create DB");
+
+    // migrate
+    let connection_pool = PgPool::connect(&config.connection_string())
+        .await
+        .expect("Failed to connect to DB when creating connection pool");
+
+    sqlx::migrate!("./migrations")
+        .run(&connection_pool)
+        .await
+        .expect("Failed to migrate DB");
+
+    connection_pool
 }
 
 //`tokio::test` is the testing equivalent of `tokio::main`.
