@@ -7,6 +7,9 @@ DB_PASSWORD="${POSTGRES_PASSWORD:=password}"
 DB_NAME="${POSTGRES_DB:=newsletter}"
 DB_PORT="${POSTGRES_PORT:=5432}"
 
+# Assumes that the role `postgres` (denoted by the -d flag) exists and has the permissions
+# If the role needs to be changed, it will also need to be updated in:
+# - config.yaml
 if [[ -z "${SKIP_DOCKER}" ]]
 then
   docker run \
