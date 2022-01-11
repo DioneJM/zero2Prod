@@ -6,6 +6,7 @@ use uuid::Uuid;
 use zero2prod::telemetry::{get_subscriber, init_subscriber};
 use once_cell::sync::Lazy;
 use tracing_subscriber::fmt::MakeWriter;
+use secrecy::ExposeSecret;
 
 pub struct TestApp {
     pub address: String,
@@ -62,7 +63,7 @@ async fn spawn_app() -> TestApp {
 }
 
 pub async fn configure_database(config: &DatabaseSettings) -> DbConnectionKind {
-    let connection = PgConnection::connect(&config.connection_string_without_db_name())
+    let connection = PgConnection::connect(&config.connection_string_without_db_name().expose_secret())
         .await
         .expect("Failed to connect to DB")
         .execute(format!(
@@ -75,7 +76,7 @@ pub async fn configure_database(config: &DatabaseSettings) -> DbConnectionKind {
         .expect("Failed to create DB");
 
     // migrate
-    let connection_pool = PgPool::connect(&config.connection_string())
+    let connection_pool = PgPool::connect(&config.connection_string().expose_secret())
         .await
         .expect("Failed to connect to DB when creating connection pool");
 

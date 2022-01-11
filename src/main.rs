@@ -4,6 +4,7 @@ use zero2prod::configuration::get_configuration;
 use sqlx::{PgPool};
 use zero2prod::startup::DbConnectionKind;
 use zero2prod::telemetry::{get_subscriber, init_subscriber};
+use secrecy::ExposeSecret;
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
@@ -19,7 +20,7 @@ async fn main() -> std::io::Result<()> {
     let address = format!("127.0.0.1:{port}", port = config.application_port);
     let listener = TcpListener::bind(address)?;
     let db_connection_pool: DbConnectionKind = PgPool::connect(
-        &config.database.connection_string())
+        &config.database.connection_string().expose_secret())
         .await
         .expect("Failed to connect to DB");
 
