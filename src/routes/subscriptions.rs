@@ -1,6 +1,5 @@
 use actix_web::{HttpResponse, Responder, web};
 use chrono::Utc;
-use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::FormData;
@@ -10,7 +9,7 @@ pub async fn subscribe(
     form: web::Form<FormData>,
     connection: web::Data<DbConnectionKind>, // connection is passed from application state
 ) -> impl Responder {
-    let hello = format!("Hello {name}", name = form.name);
+    log::info!("Saving new subscriber details - name: {} email: {}", form.name, form.email);
     match sqlx::query!(
         r#"
         INSERT INTO subscriptions (id, email, name, subscribed_at)
@@ -24,9 +23,12 @@ pub async fn subscribe(
         .execute(connection.as_ref())
         .await
     {
-        Ok(_) => HttpResponse::Ok().finish(),
+        Ok(_) => {
+            log::info!("New subscriber successfully saved");
+            HttpResponse::Ok().finish()
+        },
         Err(e) => {
-            println!("Failed to execute query: {}", e);
+            log::error!("Failed to execute query {:?}", e);
             HttpResponse::InternalServerError().finish()
         }
     }
