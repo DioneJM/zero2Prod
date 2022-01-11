@@ -3,13 +3,40 @@ use zero2prod::startup::{run, DbConnectionKind};
 use zero2prod::configuration::{get_configuration, DatabaseSettings};
 use sqlx::{PgConnection, Connection, PgPool, Executor};
 use uuid::Uuid;
+use zero2prod::telemetry::{get_subscriber, init_subscriber};
+use once_cell::sync::Lazy;
+use tracing_subscriber::fmt::MakeWriter;
 
 pub struct TestApp {
     pub address: String,
     pub connection: DbConnectionKind
 }
 
+static TRACING: Lazy<()> = Lazy::new(|| {
+
+    let default_filter_level = "info".to_string();
+    let subscriber_name = "test".to_string();
+
+    if std::env::var("TEST_LOG").is_ok() {
+        let subscriber = get_subscriber(
+            subscriber_name,
+            default_filter_level,
+            std::io::stdout
+        );
+        init_subscriber(subscriber);
+    } else {
+        let subscriber = get_subscriber(
+            subscriber_name,
+            default_filter_level,
+            std::io::sink
+        );
+        init_subscriber(subscriber);
+    }
+
+});
+
 async fn spawn_app() -> TestApp {
+    Lazy::force(&TRACING);
     let mut config = get_configuration()
         .expect("Failed to read config file");
 
@@ -35,7 +62,7 @@ async fn spawn_app() -> TestApp {
 }
 
 pub async fn configure_database(config: &DatabaseSettings) -> DbConnectionKind {
-    let mut connection = PgConnection::connect(&config.connection_string_without_db_name())
+    let connection = PgConnection::connect(&config.connection_string_without_db_name())
         .await
         .expect("Failed to connect to DB")
         .execute(format!(

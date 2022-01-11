@@ -5,6 +5,15 @@ use uuid::Uuid;
 use crate::FormData;
 use crate::startup::DbConnectionKind;
 
+#[tracing::instrument(
+    name = "Adding a new subscriber",
+    skip(form, connection),
+    fields(
+        request_id = % Uuid::new_v4(),
+        subscriber_email = % form.email,
+        subscriber_name = % form.name
+    )
+)]
 pub async fn subscribe(
     form: web::Form<FormData>,
     connection: web::Data<DbConnectionKind>, // connection is passed from application state
@@ -19,7 +28,22 @@ pub async fn subscribe(
 
     let _request_span_guard = request_span.enter();
     tracing::info!("Saving new subscriber details - name: {} email: {}", form.name, form.email);
-    match sqlx::query!(
+
+    match insert_subscriber(&connection, &form).await {
+        Ok(_) => HttpResponse::Ok().finish(),
+        Err(e) => HttpResponse::InternalServerError().finish()
+    }
+}
+
+#[tracing::instrument(
+    name = "Saving new subscriber in DB",
+    skip(form, connection),
+)]
+pub async fn insert_subscriber (
+    connection: &DbConnectionKind,
+    form: &FormData
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
         r#"
         INSERT INTO subscriptions (id, email, name, subscribed_at)
         VALUES ($1, $2, $3, $4)
@@ -29,16 +53,11 @@ pub async fn subscribe(
         form.name,
         Utc::now()
     )
-        .execute(connection.as_ref())
+        .execute(connection)
         .await
-    {
-        Ok(_) => {
-            tracing::info!("New subscriber successfully saved");
-            HttpResponse::Ok().finish()
-        },
-        Err(e) => {
-            tracing::error!("Failed to execute query {:?}", e);
-            HttpResponse::InternalServerError().finish()
-        }
-    }
+        .map_err(|e| {
+            tracing::error!("Failed to execute query: {:?}", e);
+            e
+        })?;
+    Ok(())
 }
