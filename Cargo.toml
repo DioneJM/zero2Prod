@@ -36,7 +36,8 @@ features = [
     "postgres", # provides postgres specific functionality
     "uuid", # support for mapping SQL UUIDs with type Uuid from uuid crate
     "chrono", # allows SQL timestamptz to be used with DateTime<T> from `chrono` crate
-    "migrate" # be able to manage migrations programmatically
+    "migrate", # be able to manage migrations programmatically
+    "offline"
 ]
 
 [dev-dependencies]
