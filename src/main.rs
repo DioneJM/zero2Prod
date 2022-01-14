@@ -1,7 +1,6 @@
 use std::net::TcpListener;
 use zero2prod::startup::{run};
 use zero2prod::configuration::get_configuration;
-use sqlx::{PgPool};
 use zero2prod::startup::DbConnectionKind;
 use zero2prod::telemetry::{get_subscriber, init_subscriber};
 use secrecy::ExposeSecret;

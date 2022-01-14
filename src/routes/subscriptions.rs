@@ -30,7 +30,7 @@ pub async fn subscribe(
 
     match insert_subscriber(&connection, &form).await {
         Ok(_) => HttpResponse::Ok().finish(),
-        Err(e) => HttpResponse::InternalServerError().finish()
+        Err(_e) => HttpResponse::InternalServerError().finish()
     }
 }
 

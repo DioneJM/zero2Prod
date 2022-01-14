@@ -5,7 +5,6 @@ use actix_web::dev::Server;
 use sqlx::{PgPool};
 
 use crate::routes;
-use actix_web::middleware::Logger;
 use tracing_actix_web::TracingLogger;
 
 pub type DbConnectionKind = PgPool;

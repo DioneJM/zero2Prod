@@ -85,7 +85,7 @@ pub fn get_configuration() -> Result<Settings, config::ConfigError> {
 
     settings.merge(
         config::File::from(config_directory.join(environment.as_str())).required(true)
-    );
+    ).expect("Failed to read environment file");
 
     // Parse config file into Setting struct
 
