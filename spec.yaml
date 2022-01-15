@@ -18,18 +18,21 @@ services:
     envs:
       # these environment variables are exposed by DigitalOcean during runtime
       # see: https://docs.digitalocean.com/products/app-platform/how-to/use-environment-variables/#databases
-      - key: APP_DATABASE__USENAME
+      - key: APP_DATABASE__USERNAME
         scope: RUN_TIME
         value: ${newsletter.USERNAME}
       - key: APP_DATABASE__PASSWORD
         scope: RUN_TIME
         value: ${newsletter.PASSWORD}
+      - key: APP_DATABASE__HOST
+        scope: RUN_TIME
+        value: ${newsletter.HOSTNAME}
       - key: APP_DATABASE__PORT
         scope: RUN_TIME
         value: ${newsletter.PORT}
-      - key: APP_DATABASE__NAME
+      - key: APP_DATABASE__DATABASE_NAME
         scope: RUN_TIME
-        value: ${newsletter.NAME}
+        value: ${newsletter.DATABASE}
 databases:
   - engine: PG # Postgres
     name: newsletter
