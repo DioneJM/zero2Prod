@@ -15,6 +15,21 @@ services:
     instance_size_slug: basic-xxs
     routes:
       - path: /
+    envs:
+      # these environment variables are exposed by DigitalOcean during runtime
+      # see: https://docs.digitalocean.com/products/app-platform/how-to/use-environment-variables/#databases
+      - key: APP_DATABASE__USENAME
+        scope: RUN_TIME
+        value: ${newsletter.USERNAME}
+      - key: APP_DATABASE__PASSWORD
+        scope: RUN_TIME
+        value: ${newsletter.PASSWORD}
+      - key: APP_DATABASE__PORT
+        scope: RUN_TIME
+        value: ${newsletter.PORT}
+      - key: APP_DATABASE__NAME
+        scope: RUN_TIME
+        value: ${newsletter.NAME}
 databases:
   - engine: PG # Postgres
     name: newsletter

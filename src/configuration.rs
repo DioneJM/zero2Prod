@@ -2,6 +2,7 @@ use secrecy::{Secret, ExposeSecret};
 use std::convert::{TryInto, TryFrom};
 use sqlx::postgres::PgConnectOptions;
 use serde_aux::prelude::deserialize_number_from_string;
+use sqlx::ConnectOptions;
 
 pub enum Environment {
     Local,
@@ -54,7 +55,9 @@ pub struct ApplicationSettings {
 
 impl DatabaseSettings {
     pub fn with_db(&self) -> PgConnectOptions {
-        self.without_db().database(&self.database_name)
+        let mut options = self.without_db().database(&self.database_name);
+        options.log_statements(tracing::log::LevelFilter::Trace);
+        options
     }
     pub fn without_db(&self) -> PgConnectOptions {
         PgConnectOptions::new()
