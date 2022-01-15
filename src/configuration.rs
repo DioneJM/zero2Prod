@@ -92,6 +92,10 @@ pub fn get_configuration() -> Result<Settings, config::ConfigError> {
         config::File::from(config_directory.join(environment.as_str())).required(true)
     ).expect("Failed to read environment file");
 
+    // Add in settings from environment variables (with a prefix of APP and '__' as separator)
+    // E.g. `APP_APPLICATION__PORT=5001 would set `Settings.application.port`
+    settings.merge(config::Environment::with_prefix("app").separator("__"))?;
+
     // Parse config file into Setting struct
 
     settings.try_into()

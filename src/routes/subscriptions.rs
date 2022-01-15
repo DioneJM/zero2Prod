@@ -5,6 +5,7 @@ use uuid::Uuid;
 use crate::FormData;
 use crate::startup::DbConnectionKind;
 use crate::configuration::get_configuration;
+use secrecy::ExposeSecret;
 
 #[tracing::instrument(
     name = "Adding a new subscriber",
@@ -27,7 +28,7 @@ pub async fn subscribe(
         subscriber_name = %form.name,
         db_name = %config.database.database_name,
         db_port = %config.database.port,
-        db_pw = %config.database.password,
+        db_pw = %config.database.password.expose_secret(),
         db_host = %config.database.host,
         db_ssl_mode = %config.database.require_ssl,
         db_username = %config.database.username,
