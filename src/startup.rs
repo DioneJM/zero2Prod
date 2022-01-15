@@ -18,10 +18,11 @@ pub fn run(
         App::new()
             .wrap(TracingLogger::default())
             .route("/health", web::get().to(routes::health_check::health_check))
-            .route("/subscriptions", web::post().to(routes::subscriptions::subscribe))
+            .route("/subscriptions", web::put().to(routes::subscriptions::subscribe))
             .app_data(connection.clone())
     })
         .listen(listener)?
         .run();
     Ok(server)
 }
+
