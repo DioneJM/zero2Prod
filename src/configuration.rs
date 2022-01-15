@@ -1,7 +1,7 @@
 use secrecy::{Secret, ExposeSecret};
 use std::convert::{TryInto, TryFrom};
 use sqlx::postgres::{PgConnectOptions, PgSslMode};
-use serde_aux::prelude::deserialize_number_from_string;
+use serde_aux::field_attributes::deserialize_number_from_string;
 use sqlx::ConnectOptions;
 
 pub enum Environment {
