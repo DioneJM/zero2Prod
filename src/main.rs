@@ -25,9 +25,7 @@ async fn main() -> std::io::Result<()> {
     let listener = TcpListener::bind(address)?;
     let db_connection_pool: DbConnectionKind = PgPoolOptions::new()
         .connect_timeout(std::time::Duration::from_secs(2))
-        .connect_lazy(
-            &config.database.connection_string().expose_secret())
-        .expect("Failed to connect to DB");
+        .connect_lazy_with(config.database.with_db());
 
     run(listener, db_connection_pool)?.await
 }

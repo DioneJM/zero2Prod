@@ -1,7 +1,7 @@
 use std::net::TcpListener;
 use zero2prod::startup::{run, DbConnectionKind};
 use zero2prod::configuration::{get_configuration, DatabaseSettings};
-use sqlx::{PgConnection, Connection, PgPool, Executor};
+use sqlx::{PgConnection, Connection, PgPool, Executor, ConnectOptions};
 use uuid::Uuid;
 use zero2prod::telemetry::{get_subscriber, init_subscriber};
 use once_cell::sync::Lazy;
@@ -63,7 +63,7 @@ async fn spawn_app() -> TestApp {
 }
 
 pub async fn configure_database(config: &DatabaseSettings) -> DbConnectionKind {
-    let connection = PgConnection::connect(&config.connection_string_without_db_name().expose_secret())
+    let connection = &config.without_db().connect()
         .await
         .expect("Failed to connect to DB")
         .execute(format!(
@@ -76,7 +76,7 @@ pub async fn configure_database(config: &DatabaseSettings) -> DbConnectionKind {
         .expect("Failed to create DB");
 
     // migrate
-    let connection_pool = PgPool::connect(&config.connection_string().expose_secret())
+    let connection_pool = PgPool::connect_with(config.with_db())
         .await
         .expect("Failed to connect to DB when creating connection pool");
 
