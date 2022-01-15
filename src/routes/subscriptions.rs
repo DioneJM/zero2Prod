@@ -20,18 +20,11 @@ pub async fn subscribe(
     connection: web::Data<DbConnectionKind>, // connection is passed from application state
 ) -> impl Responder {
     let request_id = Uuid::new_v4();
-    let config = get_configuration().expect("no config");
     let request_span = tracing::info_span!(
         "Adding a new subscriber",
         %request_id,
         subscriber_email = %form.email,
-        subscriber_name = %form.name,
-        db_name = %config.database.database_name,
-        db_port = %config.database.port,
-        db_pw = %config.database.password.expose_secret(),
-        db_host = %config.database.host,
-        db_ssl_mode = %config.database.require_ssl,
-        db_username = %config.database.username,
+        subscriber_name = %form.name
     );
 
     let _request_span_guard = request_span.enter();
