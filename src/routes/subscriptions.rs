@@ -18,7 +18,10 @@ pub async fn subscribe(
     form: web::Form<FormData>,
     connection: web::Data<DbConnectionKind>, // connection is passed from application state
 ) -> impl Responder {
-    let subscriber_name = SubscriberName::parse(form.name.clone());
+    let subscriber_name = match SubscriberName::parse(form.name.clone()) {
+        Ok(name) => name,
+        Err(_) => return HttpResponse::BadRequest().finish()
+    };
     let new_subscriber: NewSubscriber = NewSubscriber {
         email: form.email.clone(),
         name: subscriber_name
