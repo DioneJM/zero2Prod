@@ -6,6 +6,7 @@ use crate::FormData;
 use crate::startup::DbConnectionKind;
 use crate::domain::{SubscriberName, NewSubscriber};
 use crate::domain::subscriber_email::SubscriberEmail;
+use std::prelude::rust_2021::TryInto;
 
 #[tracing::instrument(
     name = "Adding a new subscriber",
@@ -19,17 +20,9 @@ pub async fn subscribe(
     form: web::Form<FormData>,
     connection: web::Data<DbConnectionKind>, // connection is passed from application state
 ) -> impl Responder {
-    let subscriber_name = match SubscriberName::parse(form.name.clone()) {
-        Ok(name) => name,
+    let new_subscriber: NewSubscriber = match form.0.try_into() {
+        Ok(subscriber) => subscriber,
         Err(_) => return HttpResponse::BadRequest().finish()
-    };
-    let subscriber_email = match SubscriberEmail::parse(form.email.clone()) {
-        Ok(name) => name,
-        Err(_) => return HttpResponse::BadRequest().finish()
-    };
-    let new_subscriber: NewSubscriber = NewSubscriber {
-        email: subscriber_email,
-        name: subscriber_name
     };
     let request_id = Uuid::new_v4();
     let request_span = tracing::info_span!(
@@ -40,7 +33,6 @@ pub async fn subscribe(
     );
 
     let _request_span_guard = request_span.enter();
-    tracing::info!("Saving new subscriber details - name: {} email: {}", form.name, form.email);
 
     match insert_subscriber(&connection, &new_subscriber).await {
         Ok(_) => HttpResponse::Ok().finish(),
