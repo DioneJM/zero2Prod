@@ -5,6 +5,7 @@ use uuid::Uuid;
 use crate::FormData;
 use crate::startup::DbConnectionKind;
 use crate::domain::{SubscriberName, NewSubscriber};
+use crate::domain::subscriber_email::SubscriberEmail;
 
 #[tracing::instrument(
     name = "Adding a new subscriber",
@@ -22,15 +23,19 @@ pub async fn subscribe(
         Ok(name) => name,
         Err(_) => return HttpResponse::BadRequest().finish()
     };
+    let subscriber_email = match SubscriberEmail::parse(form.email.clone()) {
+        Ok(name) => name,
+        Err(_) => return HttpResponse::BadRequest().finish()
+    };
     let new_subscriber: NewSubscriber = NewSubscriber {
-        email: form.email.clone(),
+        email: subscriber_email,
         name: subscriber_name
     };
     let request_id = Uuid::new_v4();
     let request_span = tracing::info_span!(
         "Adding a new subscriber",
         %request_id,
-        subscriber_email = %new_subscriber.email,
+        subscriber_email = %new_subscriber.email.as_ref(),
         subscriber_name = %new_subscriber.name.as_ref()
     );
 
@@ -57,7 +62,7 @@ pub async fn insert_subscriber (
         VALUES ($1, $2, $3, $4)
         "#,
         Uuid::new_v4(),
-        new_subscriber.email,
+        new_subscriber.email.as_ref(),
         new_subscriber.name.as_ref(),
         Utc::now()
     )
