@@ -4,8 +4,6 @@ use uuid::Uuid;
 
 use crate::FormData;
 use crate::startup::DbConnectionKind;
-use crate::configuration::get_configuration;
-use secrecy::ExposeSecret;
 
 #[tracing::instrument(
     name = "Adding a new subscriber",
