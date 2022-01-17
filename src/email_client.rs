@@ -32,11 +32,11 @@ impl EmailClient {
     ) -> Result<(), reqwest::Error> {
         let endpoint = format! {"{}/email", self.base_url};
         let request_body: SendEmailRequest = SendEmailRequest {
-            from: self.sender.as_ref().to_owned(),
-            to: recipient.as_ref().to_owned(),
-            subject: subject.to_owned(),
-            html_body: html_content.to_owned(),
-            text_body: text_content.to_owned(),
+            from: self.sender.as_ref(),
+            to: recipient.as_ref(),
+            subject: subject,
+            html_body: html_content,
+            text_body: text_content,
         };
         let builder = self
             .http_client
@@ -54,17 +54,18 @@ impl EmailClient {
 }
 
 #[derive(serde::Serialize)]
-struct SendEmailRequest {
-    from: String,
-    to: String,
-    subject: String,
-    text_body: String,
-    html_body: String,
+#[serde(rename_all = "PascalCase")]
+struct SendEmailRequest<'a> {
+    from: &'a str,
+    to: &'a str,
+    subject: &'a str,
+    text_body: &'a str,
+    html_body: &'a str,
 }
 
 #[cfg(test)]
 mod tests {
-    use wiremock::{MockServer, Mock, ResponseTemplate};
+    use wiremock::{MockServer, Mock, ResponseTemplate, Request};
     use crate::domain::subscriber_email::SubscriberEmail;
     use fake::faker::internet::en::SafeEmail;
     use fake::{Fake, Faker};
@@ -72,6 +73,24 @@ mod tests {
     use wiremock::matchers::{any, header_exists, header, path, method};
     use fake::faker::lorem::en::Sentence;
     use secrecy::Secret;
+
+    struct SendEmailBodyMatcher;
+
+    impl wiremock::Match for SendEmailBodyMatcher {
+        fn matches(&self, request: &Request) -> bool {
+            let result: Result<serde_json::Value, _> = serde_json::from_slice(&request.body);
+
+            if let Ok(body) = result {
+                body.get("From").is_some()
+                    && body.get("To").is_some()
+                    && body.get("Subject").is_some()
+                    && body.get("HtmlBody").is_some()
+                    && body.get("TextBody").is_some()
+            } else {
+                false
+            }
+        }
+    }
 
     #[tokio::test]
     async fn send_email_fires_a_request_to_base_url() {
@@ -88,6 +107,7 @@ mod tests {
             .and(header("Content-Type", "application/json"))
             .and(path("/email"))
             .and(method("POST"))
+            .and(SendEmailBodyMatcher)
             .respond_with(ResponseTemplate::new(200))
             .expect(1)
             .mount(&mock_server)
