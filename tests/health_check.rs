@@ -5,6 +5,8 @@ use sqlx::{PgPool, Executor, ConnectOptions};
 use uuid::Uuid;
 use zero2prod::telemetry::{get_subscriber, init_subscriber};
 use once_cell::sync::Lazy;
+use zero2prod::domain::subscriber_email::SubscriberEmail;
+use zero2prod::email_client::EmailClient;
 
 pub struct TestApp {
     pub address: String,
@@ -48,9 +50,21 @@ async fn spawn_app() -> TestApp {
         .port();
     let db_connection_pool: DbConnectionKind = configure_database(&config.database).await;
 
+    let sender_email: SubscriberEmail = SubscriberEmail::parse(config.email_client.sender_email)
+        .expect("Invalid email found in config");
+
+    let email_client = EmailClient::new(
+        config.email_client.base_url,
+        sender_email,
+        config.email_client.authorization_token
+    );
+
+
     let server = run(
         listener,
-        db_connection_pool.clone())
+        db_connection_pool.clone(),
+        email_client
+    )
         .expect("Failed to bind address");
     let _ = tokio::spawn(server);
     // We return the application address to the caller!
