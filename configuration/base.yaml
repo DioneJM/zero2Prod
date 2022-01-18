@@ -11,3 +11,4 @@ email_client:
   sender_email: "dionethedeveloper@gmail.com"
   base_url: "localhost"
   authorization_token: "my-secret-token"
+  timeout_milliseconds: 10000

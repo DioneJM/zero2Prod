@@ -28,13 +28,15 @@ async fn main() -> std::io::Result<()> {
         .connect_timeout(std::time::Duration::from_secs(2))
         .connect_lazy_with(config.database.with_db());
 
-    let sender_email: SubscriberEmail = SubscriberEmail::parse(config.email_client.sender_email)
+    let sender_email: SubscriberEmail = config.email_client.sender()
         .expect("Invalid email found in config");
 
+    let timeout = config.email_client.timeout();
     let email_client = EmailClient::new(
         config.email_client.base_url,
         sender_email,
-        config.email_client.authorization_token
+        config.email_client.authorization_token,
+        timeout
     );
 
     run(listener, db_connection_pool, email_client)?.await

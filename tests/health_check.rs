@@ -50,13 +50,15 @@ async fn spawn_app() -> TestApp {
         .port();
     let db_connection_pool: DbConnectionKind = configure_database(&config.database).await;
 
-    let sender_email: SubscriberEmail = SubscriberEmail::parse(config.email_client.sender_email)
+    let sender_email: SubscriberEmail = config.email_client.sender()
         .expect("Invalid email found in config");
 
+    let timeout = config.email_client.timeout();
     let email_client = EmailClient::new(
         config.email_client.base_url,
         sender_email,
-        config.email_client.authorization_token
+        config.email_client.authorization_token,
+        timeout
     );
 
 
