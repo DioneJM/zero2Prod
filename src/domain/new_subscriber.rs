@@ -1,6 +1,6 @@
 use crate::domain::SubscriberName;
 use crate::domain::subscriber_email::SubscriberEmail;
-use std::prelude::rust_2021::{TryFrom, TryInto};
+use std::prelude::rust_2021::{TryFrom};
 use crate::FormData;
 
 pub struct NewSubscriber {

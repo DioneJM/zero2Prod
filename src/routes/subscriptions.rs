@@ -4,8 +4,7 @@ use uuid::Uuid;
 
 use crate::FormData;
 use crate::startup::DbConnectionKind;
-use crate::domain::{SubscriberName, NewSubscriber};
-use crate::domain::subscriber_email::SubscriberEmail;
+use crate::domain::{NewSubscriber};
 use std::prelude::rust_2021::TryInto;
 
 #[tracing::instrument(

@@ -1,6 +1,5 @@
 use crate::domain::subscriber_email::SubscriberEmail;
 use reqwest::Client;
-use crate::configuration::get_configuration;
 use secrecy::{Secret, ExposeSecret};
 
 pub struct EmailClient {
@@ -43,7 +42,7 @@ impl EmailClient {
             html_body: html_content,
             text_body: text_content,
         };
-        let builder = self
+        let _builder = self
             .http_client
             .post(endpoint)
             .header(
