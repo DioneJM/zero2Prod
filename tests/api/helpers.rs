@@ -1,10 +1,7 @@
 use once_cell::sync::Lazy;
 use zero2prod::configuration::{get_configuration, DatabaseSettings};
 use uuid::Uuid;
-use std::net::TcpListener;
-use zero2prod::startup::{DbConnectionKind, run};
-use zero2prod::domain::subscriber_email::SubscriberEmail;
-use zero2prod::email_client::EmailClient;
+use zero2prod::startup::{DbConnectionKind, Application, get_database_connection};
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use zero2prod::telemetry::{init_subscriber, get_subscriber};
 
@@ -39,41 +36,28 @@ pub struct TestApp {
 
 pub async fn spawn_app() -> TestApp {
     Lazy::force(&TRACING);
-    let mut config = get_configuration()
-        .expect("Failed to read config file");
 
-    config.database.database_name = Uuid::new_v4().to_string();
-    let listener = TcpListener::bind("127.0.0.1:0")
-        .expect("Failed to bind random port");
-    // We retrieve the port assigned to us by the OS
-    let port = listener.local_addr()
-        .unwrap()
-        .port();
-    let db_connection_pool: DbConnectionKind = configure_database(&config.database).await;
+    let configuration = {
+        let mut config = get_configuration()
+            .expect("Failed to read config file");
 
-    let sender_email: SubscriberEmail = config.email_client.sender()
-        .expect("Invalid email found in config");
+        config.database.database_name = Uuid::new_v4().to_string();
+        config.application.port = 0;
+        config
+    };
 
-    let timeout = config.email_client.timeout();
-    let email_client = EmailClient::new(
-        config.email_client.base_url,
-        sender_email,
-        config.email_client.authorization_token,
-        timeout
-    );
+    // Create and migrate the database
+    configure_database(&configuration.database).await;
 
-
-    let server = run(
-        listener,
-        db_connection_pool.clone(),
-        email_client
-    )
-        .expect("Failed to bind address");
-    let _ = tokio::spawn(server);
+    let application = Application::build(configuration.clone())
+        .await
+        .expect("Failed to build application");
+    let address = format!("http:127.0.0.1:{}", application.port());
+    let _ = tokio::spawn(application.run_until_stopped());
     // We return the application address to the caller!
     TestApp {
-        address: format!("http://127.0.0.1:{}", port),
-        connection: db_connection_pool
+        address,
+        connection: get_database_connection(&configuration.database)
     }
 }
 
