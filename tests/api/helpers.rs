@@ -4,6 +4,7 @@ use uuid::Uuid;
 use zero2prod::startup::{DbConnectionKind, Application, get_database_connection};
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use zero2prod::telemetry::{init_subscriber, get_subscriber};
+use wiremock::MockServer;
 
 static TRACING: Lazy<()> = Lazy::new(|| {
 
@@ -30,19 +31,22 @@ static TRACING: Lazy<()> = Lazy::new(|| {
 
 pub struct TestApp {
     pub address: String,
-    pub connection: DbConnectionKind
+    pub connection: DbConnectionKind,
+    pub email_server: MockServer
 }
 
 
 pub async fn spawn_app() -> TestApp {
     Lazy::force(&TRACING);
 
+    let email_server = MockServer::start().await;
     let configuration = {
         let mut config = get_configuration()
             .expect("Failed to read config file");
 
         config.database.database_name = Uuid::new_v4().to_string();
         config.application.port = 0;
+        config.email_client.base_url = email_server.uri();
         config
     };
 
@@ -57,7 +61,8 @@ pub async fn spawn_app() -> TestApp {
     // We return the application address to the caller!
     TestApp {
         address,
-        connection: get_database_connection(&configuration.database)
+        connection: get_database_connection(&configuration.database),
+        email_server
     }
 }
 

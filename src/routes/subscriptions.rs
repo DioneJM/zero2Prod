@@ -6,18 +6,20 @@ use crate::FormData;
 use crate::startup::DbConnectionKind;
 use crate::domain::{NewSubscriber};
 use std::prelude::rust_2021::TryInto;
+use crate::email_client::EmailClient;
 
 #[tracing::instrument(
-    name = "Adding a new subscriber",
-    skip(form, connection),
-    fields(
-        subscriber_email = %form.email,
-        subscriber_name = %form.name
-    )
+name = "Adding a new subscriber",
+skip(form, connection, email_client),
+fields(
+subscriber_email = % form.email,
+subscriber_name = % form.name
+)
 )]
 pub async fn subscribe(
     form: web::Form<FormData>,
     connection: web::Data<DbConnectionKind>, // connection is passed from application state
+    email_client: web::Data<EmailClient>,
 ) -> impl Responder {
     let new_subscriber: NewSubscriber = match form.0.try_into() {
         Ok(subscriber) => subscriber,
@@ -33,19 +35,30 @@ pub async fn subscribe(
 
     let _request_span_guard = request_span.enter();
 
-    match insert_subscriber(&connection, &new_subscriber).await {
-        Ok(_) => HttpResponse::Ok().finish(),
-        Err(_e) => HttpResponse::InternalServerError().finish()
+    if insert_subscriber(&connection, &new_subscriber).await.is_err() {
+        return HttpResponse::InternalServerError().finish();
     }
+
+    if email_client.send_email(
+        new_subscriber.email,
+        "Welcome!",
+        "<h1>Welcome</h1><br/>Welcome to our newsletter!",
+        "Welcome to our newsletter!",
+    )
+        .await
+        .is_err() {
+        return HttpResponse::InternalServerError().finish();
+    }
+    HttpResponse::Ok().finish()
 }
 
 #[tracing::instrument(
-    name = "Saving new subscriber in DB",
-    skip(new_subscriber, connection),
+name = "Saving new subscriber in DB",
+skip(new_subscriber, connection),
 )]
-pub async fn insert_subscriber (
+pub async fn insert_subscriber(
     connection: &DbConnectionKind,
-    new_subscriber: &NewSubscriber
+    new_subscriber: &NewSubscriber,
 ) -> Result<(), sqlx::Error> {
     sqlx::query!(
         r#"

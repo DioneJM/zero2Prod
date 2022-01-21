@@ -1,4 +1,6 @@
 use crate::helpers::spawn_app;
+use wiremock::{Mock, ResponseTemplate, MockServer};
+use wiremock::matchers::{any, path};
 
 #[tokio::test]
 async fn subscribe_returns_200_for_valid_form_data() {
@@ -8,6 +10,12 @@ async fn subscribe_returns_200_for_valid_form_data() {
     let name = "Dione";
     let email = "dionemorales@outlook.com";
     let body = format!("name={name}&email={email}", name = name, email = email);
+
+    Mock::given(path("/email"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(1)
+        .mount(&app.email_server)
+        .await;
 
     let response = client
         .post(&format!("{}/subscriptions", &app.address))
@@ -26,6 +34,29 @@ async fn subscribe_returns_200_for_valid_form_data() {
 
     assert_eq!(saved.name, name);
     assert_eq!(saved.email, email);
+}
+
+#[tokio::test]
+async fn subscribe_sends_confirmation_email_for_valid_form_data() {
+    let app = spawn_app().await;
+    let body = "name=Dione&email=dione%40email.com";
+
+    Mock::given(path("/email"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(1)
+        .mount(&app.email_server)
+        .await;
+
+    let client = reqwest::Client::new();
+
+    let _ = client
+        .post(&format!("{}/subscriptions", &app.address))
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .body(body)
+        .send()
+        .await
+        .expect("Failed to submit subscription information");
+
 }
 
 #[tokio::test]
