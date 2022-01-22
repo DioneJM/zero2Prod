@@ -56,7 +56,6 @@ async fn subscribe_sends_confirmation_email_for_valid_form_data() {
         .send()
         .await
         .expect("Failed to submit subscription information");
-
 }
 
 #[tokio::test]
@@ -87,7 +86,7 @@ async fn subscribe_sends_confirmation_email_with_link() {
     let get_link = |s: &str| {
         let links: Vec<_> = linkify::LinkFinder::new()
             .links(s)
-            .filter(|link| { *link.kind() == linkify::LinkKind::Url})
+            .filter(|link| { *link.kind() == linkify::LinkKind::Url })
             .collect();
         assert_eq!(links.len(), 1);
         links[0].as_str().to_owned()
@@ -96,7 +95,6 @@ async fn subscribe_sends_confirmation_email_with_link() {
     let html_link = get_link(&request_body["HtmlBody"].as_str().unwrap());
     let text_link = get_link(&request_body["TextBody"].as_str().unwrap());
     assert_eq!(html_link, text_link)
-
 }
 
 #[tokio::test]
@@ -125,6 +123,36 @@ async fn subscribe_returns_400_when_missing_data() {
             error_message
         )
     }
+}
+
+#[tokio::test]
+async fn subscribe_persists_the_new_subscriber() {
+    let app = spawn_app().await;
+    let body = "name=Dione&email=dione%40email.com";
+
+    Mock::given(path("/email"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&app.email_server)
+        .await;
+
+    let client = reqwest::Client::new();
+
+    client
+        .post(&format!("{}/subscriptions", &app.address))
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .body(body)
+        .send()
+        .await
+        .expect("Failed to submit subscription information");
+
+    let saved_subscriber = sqlx::query!("SELECT email, name, status FROM subscriptions")
+        .fetch_one(&app.connection)
+        .await
+        .expect("Failed to get saved subscription");
+
+    assert_eq!(saved_subscriber.email, "dione@email.com");
+    assert_eq!(saved_subscriber.name, "Dione");
+    assert_eq!(saved_subscriber.status, "pending_confirmation");
 }
 
 #[tokio::test]
