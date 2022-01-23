@@ -2,6 +2,7 @@ use actix_web::{HttpResponse, web};
 use crate::startup::DbConnectionKind;
 use crate::domain::NewSubscriber;
 use uuid::Uuid;
+use sqlx::{Transaction, Postgres};
 
 #[derive(serde::Deserialize)]
 pub struct Parameters {
@@ -17,8 +18,14 @@ pub async fn confirm(
     params: web::Query<Parameters>
 ) -> HttpResponse {
     let subscription_token = params.0.subscription_token;
+
+    let mut transaction = match connection.begin().await {
+        Ok(transaction) => transaction,
+        Err(_) => return HttpResponse::InternalServerError().finish()
+    };
+
     let subscriber_id = match get_subscriber_id_from_token(
-        &connection,
+        &mut transaction,
         subscription_token
     ).await {
         Ok(id) => id,
@@ -28,16 +35,24 @@ pub async fn confirm(
     match subscriber_id {
         None => HttpResponse::Unauthorized().finish(),
         Some(id) => {
-            if confirm_subscriber(&connection, id).await.is_err() {
-                return HttpResponse::InternalServerError().finish()
+            if confirm_subscriber(&mut transaction, id).await.is_err() {
+                return HttpResponse::InternalServerError().finish();
+            }
+            if transaction.commit().await.is_err() {
+                return HttpResponse::InternalServerError().finish();
             }
             HttpResponse::Ok().finish()
         }
     }
 }
 
+#[tracing::instrument(
+    name = "Set subscriber status to confirm",
+    skip(transaction, subscriber_id)
+)]
+
 pub async fn confirm_subscriber(
-    connection: &DbConnectionKind,
+    transaction: &mut Transaction<'_, Postgres>,
     subscriber_id: Uuid
 ) -> Result<(), sqlx::Error> {
     sqlx::query!(
@@ -48,7 +63,7 @@ pub async fn confirm_subscriber(
         "#,
         subscriber_id
     )
-        .execute(connection)
+        .execute(transaction)
         .await
         .map_err(|e| {
             tracing::error!("Failed to execute query: {:?}", e);
@@ -59,10 +74,10 @@ pub async fn confirm_subscriber(
 
 #[tracing::instrument(
     name = "Retrieving subscriber id from token",
-    skip(connection, subscription_token)
+    skip(transaction, subscription_token)
 )]
 pub async fn get_subscriber_id_from_token(
-    connection: &DbConnectionKind,
+    transaction: &mut Transaction<'_, Postgres>,
     subscription_token: String
 ) -> Result<Option<Uuid>, sqlx::Error> {
     let result = sqlx::query!(
@@ -72,7 +87,7 @@ pub async fn get_subscriber_id_from_token(
         "#,
         subscription_token
     )
-        .fetch_optional(connection)
+        .fetch_optional(transaction)
         .await
         .map_err(|e| {
             tracing::error!("Failed to execute query: {:?}", e);
