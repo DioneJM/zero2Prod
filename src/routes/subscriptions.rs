@@ -9,12 +9,12 @@ use std::prelude::rust_2021::TryInto;
 use crate::email_client::EmailClient;
 
 #[tracing::instrument(
-name = "Adding a new subscriber",
-skip(form, connection, email_client),
-fields(
-subscriber_email = % form.email,
-subscriber_name = % form.name
-)
+    name = "Adding a new subscriber",
+    skip(form, connection, email_client),
+    fields(
+    subscriber_email = % form.email,
+    subscriber_name = % form.name
+    )
 )]
 pub async fn subscribe(
     form: web::Form<FormData>,
@@ -66,8 +66,8 @@ pub async fn send_confirmation_email(
 }
 
 #[tracing::instrument(
-name = "Saving new subscriber in DB",
-skip(new_subscriber, connection),
+    name = "Saving new subscriber in DB",
+    skip(new_subscriber, connection),
 )]
 pub async fn insert_subscriber(
     connection: &DbConnectionKind,

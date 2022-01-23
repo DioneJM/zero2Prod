@@ -73,6 +73,7 @@ pub fn run(
             .wrap(TracingLogger::default())
             .route("/health", web::get().to(routes::health_check::health_check))
             .route("/subscriptions", web::post().to(routes::subscriptions::subscribe))
+            .route("/subscriptions/confirm", web::get().to(routes::subscriptions_confirm::confirm))
             .app_data(connection.clone())
             .app_data(email_client.clone())
     })
