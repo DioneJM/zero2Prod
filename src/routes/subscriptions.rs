@@ -7,6 +7,8 @@ use crate::startup::{DbConnectionKind, ApplicationBaseUrl};
 use crate::domain::{NewSubscriber};
 use std::convert::{TryFrom, TryInto};
 use crate::email_client::EmailClient;
+use rand::{thread_rng, Rng};
+use rand::distributions::Alphanumeric;
 
 #[tracing::instrument(
     name = "Adding a new subscriber",
@@ -36,14 +38,21 @@ pub async fn subscribe(
 
     let _request_span_guard = request_span.enter();
 
-    if insert_subscriber(&connection, &new_subscriber).await.is_err() {
+    let subscriber_id = match insert_subscriber(&connection, &new_subscriber).await {
+        Ok(id) => id,
+        Err(_) => return HttpResponse::InternalServerError().finish(),
+    };
+    let subscription_token = generate_subscription_token();
+
+    if store_token(&connection, &subscriber_id, &subscription_token).await.is_err() {
         return HttpResponse::InternalServerError().finish();
     }
 
     if send_confirmation_email(
         &email_client,
         new_subscriber,
-        &base_url.0
+        &base_url.0,
+        &subscription_token
     ).await.is_err() {
         return HttpResponse::InternalServerError().finish();
     }
@@ -58,9 +67,9 @@ pub async fn subscribe(
 pub async fn send_confirmation_email(
     email_client: &EmailClient,
     new_subscriber: NewSubscriber,
-    base_url: &str
+    base_url: &str,
+    subscription_token: &str
 ) -> Result<(), reqwest::Error> {
-    let subscription_token = "mytoken";
     let confirmation_link = format!(
         "{base_url}/subscriptions/confirm?subscription_token={token}",
         base_url = base_url,
@@ -87,13 +96,14 @@ pub async fn send_confirmation_email(
 pub async fn insert_subscriber(
     connection: &DbConnectionKind,
     new_subscriber: &NewSubscriber,
-) -> Result<(), sqlx::Error> {
+) -> Result<Uuid, sqlx::Error> {
+    let subscriber_id = Uuid::new_v4();
     sqlx::query!(
         r#"
         INSERT INTO subscriptions (id, email, name, subscribed_at, status)
         VALUES ($1, $2, $3, $4, 'pending_confirmation')
         "#,
-        Uuid::new_v4(),
+        subscriber_id,
         new_subscriber.email.as_ref(),
         new_subscriber.name.as_ref(),
         Utc::now()
@@ -104,5 +114,40 @@ pub async fn insert_subscriber(
             tracing::error!("Failed to execute query: {:?}", e);
             e
         })?;
+    Ok(subscriber_id)
+}
+
+#[tracing::instrument(
+    name = "Saving subscription_token of new subscriber",
+    skip(connection, subscriber_id, subscription_token),
+)]
+pub async fn store_token(
+    connection: &DbConnectionKind,
+    subscriber_id: &Uuid,
+    subscription_token: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        r#"
+        INSERT INTO subscription_tokens (subscription_token, subscriber_id)
+        VALUES ($1, $2)
+        "#,
+        subscription_token,
+        subscriber_id,
+    )
+        .execute(connection)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to execute query: {:?}", e);
+            e
+        })?;
+
     Ok(())
+}
+
+fn generate_subscription_token() -> String {
+    let mut rng = thread_rng();
+    std::iter::repeat_with(|| rng.sample(Alphanumeric))
+        .map(char::from)
+        .take(25)
+        .collect()
 }
