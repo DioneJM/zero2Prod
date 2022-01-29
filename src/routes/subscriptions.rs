@@ -1,4 +1,4 @@
-use actix_web::{HttpResponse, Responder, web};
+use actix_web::{HttpResponse, Responder, web, ResponseError};
 use chrono::Utc;
 use uuid::Uuid;
 
@@ -10,31 +10,46 @@ use crate::email_client::EmailClient;
 use rand::{thread_rng, Rng};
 use rand::distributions::Alphanumeric;
 use sqlx::{Transaction, Postgres};
+use std::fmt::{Display, Formatter};
+
+#[derive(Debug)]
+pub struct StoreTokenError(sqlx::Error);
+
+impl Display for StoreTokenError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "A database error was encountered while trying to store a subscription token."
+        )
+    }
+}
+
+impl ResponseError for StoreTokenError {}
 
 #[tracing::instrument(
-    name = "Adding a new subscriber",
-    skip(form, connection, email_client, base_url),
-    fields(
-        subscriber_email = % form.email,
-        subscriber_name = % form.name
-    )
+name = "Adding a new subscriber",
+skip(form, connection, email_client, base_url),
+fields(
+subscriber_email = % form.email,
+subscriber_name = % form.name
+)
 )]
 pub async fn subscribe(
     form: web::Form<FormData>,
     connection: web::Data<DbConnectionKind>, // connection is passed from application state
     email_client: web::Data<EmailClient>,
-    base_url: web::Data<ApplicationBaseUrl>
-) -> impl Responder {
+    base_url: web::Data<ApplicationBaseUrl>,
+) -> Result<HttpResponse, actix_web::Error> {
     let new_subscriber: NewSubscriber = match form.0.try_into() {
         Ok(subscriber) => subscriber,
-        Err(_) => return HttpResponse::BadRequest().finish()
+        Err(_) => return Ok(HttpResponse::BadRequest().finish())
     };
 
     // We create a transaction at the endpoint level so that all of the DB updates
     // that is made below will all be committed/rollbacked together (handled atomically)
     let mut transaction = match connection.begin().await {
         Ok(transaction) => transaction,
-        Err(_) => return HttpResponse::InternalServerError().finish()
+        Err(_) => return Ok(HttpResponse::InternalServerError().finish())
     };
     let request_id = Uuid::new_v4();
     let request_span = tracing::info_span!(
@@ -48,39 +63,37 @@ pub async fn subscribe(
 
     let subscriber_id = match insert_subscriber(&mut transaction, &new_subscriber).await {
         Ok(id) => id,
-        Err(_) => return HttpResponse::InternalServerError().finish(),
+        Err(_) => return Ok(HttpResponse::InternalServerError().finish()),
     };
     let subscription_token = generate_subscription_token();
 
-    if store_token(&mut transaction, &subscriber_id, &subscription_token).await.is_err() {
-        return HttpResponse::InternalServerError().finish();
-    }
+    store_token(&mut transaction, &subscriber_id, &subscription_token).await?;
 
     if transaction.commit().await.is_err() {
-        return HttpResponse::InternalServerError().finish();
+        return Ok(HttpResponse::InternalServerError().finish());
     }
 
     if send_confirmation_email(
         &email_client,
         new_subscriber,
         &base_url.0,
-        &subscription_token
+        &subscription_token,
     ).await.is_err() {
-        return HttpResponse::InternalServerError().finish();
+        return Ok(HttpResponse::InternalServerError().finish());
     }
 
-    HttpResponse::Ok().finish()
+    Ok(HttpResponse::Ok().finish())
 }
 
 #[tracing::instrument(
-    name = "Send a confirmation email to a new subscriber",
-    skip(email_client, new_subscriber, base_url)
+name = "Send a confirmation email to a new subscriber",
+skip(email_client, new_subscriber, base_url)
 )]
 pub async fn send_confirmation_email(
     email_client: &EmailClient,
     new_subscriber: NewSubscriber,
     base_url: &str,
-    subscription_token: &str
+    subscription_token: &str,
 ) -> Result<(), reqwest::Error> {
     let confirmation_link = format!(
         "{base_url}/subscriptions/confirm?subscription_token={token}",
@@ -102,8 +115,8 @@ pub async fn send_confirmation_email(
 }
 
 #[tracing::instrument(
-    name = "Saving new subscriber in DB",
-    skip(new_subscriber, transaction),
+name = "Saving new subscriber in DB",
+skip(new_subscriber, transaction),
 )]
 pub async fn insert_subscriber(
     transaction: &mut Transaction<'_, Postgres>,
@@ -130,14 +143,14 @@ pub async fn insert_subscriber(
 }
 
 #[tracing::instrument(
-    name = "Saving subscription_token of new subscriber",
+name = "Saving subscription_token of new subscriber",
     skip(transaction, subscriber_id, subscription_token),
 )]
 pub async fn store_token(
     transaction: &mut Transaction<'_, Postgres>,
     subscriber_id: &Uuid,
     subscription_token: &str,
-) -> Result<(), sqlx::Error> {
+) -> Result<(), StoreTokenError> {
     sqlx::query!(
         r#"
         INSERT INTO subscription_tokens (subscription_token, subscriber_id)
@@ -149,8 +162,7 @@ pub async fn store_token(
         .execute(transaction)
         .await
         .map_err(|e| {
-            tracing::error!("Failed to execute query: {:?}", e);
-            e
+            StoreTokenError(e)
         })?;
 
     Ok(())
