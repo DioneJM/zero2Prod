@@ -5,6 +5,29 @@ use reqwest::Url;
 
 
 #[tokio::test]
+async fn subscribe_fails_if_there_is_a_fatal_database_error() {
+    let app = spawn_app().await;
+    let body = "name=Dione&email=dione%40email.com";
+
+    sqlx::query!("ALTER TABLE subscription_tokens DROP COLUMN subscription_token")
+        .execute(&app.connection)
+        .await
+        .unwrap();
+
+    let client = reqwest::Client::new();
+
+    let response = client
+        .post(&format!("{}/subscriptions", &app.address))
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .body(body)
+        .send()
+        .await
+        .expect("Failed to submit subscription information");
+
+    assert_eq!(response.status().as_u16(), 500);
+}
+
+#[tokio::test]
 async fn the_link_returned_by_subscribe_returns_a_200_if_called() {
     let app = spawn_app().await;
     let body = "name=Dione&email=dione%40email.com";
