@@ -11,8 +11,9 @@ use rand::{thread_rng, Rng};
 use rand::distributions::Alphanumeric;
 use sqlx::{Transaction, Postgres};
 use std::fmt::{Display, Formatter};
+use std::error::Error;
+use std::any::TypeId;
 
-#[derive(Debug)]
 pub struct StoreTokenError(sqlx::Error);
 
 impl Display for StoreTokenError {
@@ -25,6 +26,18 @@ impl Display for StoreTokenError {
 }
 
 impl ResponseError for StoreTokenError {}
+
+impl std::error::Error for StoreTokenError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        Some(&self.0)
+    }
+}
+
+impl std::fmt::Debug for StoreTokenError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}\nCaused by:\n\t{}", self, self.0)
+    }
+}
 
 #[tracing::instrument(
 name = "Adding a new subscriber",
