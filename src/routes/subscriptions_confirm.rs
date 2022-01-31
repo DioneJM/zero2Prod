@@ -1,15 +1,10 @@
 use actix_web::{HttpResponse, web, ResponseError};
 use crate::startup::DbConnectionKind;
-use crate::domain::NewSubscriber;
 use uuid::Uuid;
 use sqlx::{Transaction, Postgres};
 use std::fmt::Formatter;
 use std::error::Error;
-use std::any::TypeId;
-use crate::routes::subscriptions::SubscribeError;
 use actix_web::http::StatusCode;
-use actix_web::body::BoxBody;
-use sqlx::error::Error::Configuration;
 
 #[derive(serde::Deserialize)]
 pub struct Parameters {

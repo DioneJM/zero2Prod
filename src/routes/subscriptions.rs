@@ -1,4 +1,4 @@
-use actix_web::{HttpResponse, Responder, web, ResponseError};
+use actix_web::{HttpResponse, web, ResponseError};
 use chrono::Utc;
 use uuid::Uuid;
 
@@ -33,7 +33,7 @@ impl std::error::Error for StoreTokenError {
     }
 }
 
-fn error_chain_fmt(
+pub fn error_chain_fmt(
     e: &impl std::error::Error,
     f: &mut std::fmt::Formatter<'_>
 ) -> std::fmt::Result {
@@ -191,7 +191,7 @@ pub async fn send_confirmation_email(
     );
     let text_body = &format!("Welcome to our newsletter!\nVisit {url} to confirm your subscription", url = confirmation_link);
     email_client.send_email(
-        new_subscriber.email,
+        &new_subscriber.email,
         "Welcome!",
         html_body,
         text_body,

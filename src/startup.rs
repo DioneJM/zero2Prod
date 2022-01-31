@@ -78,6 +78,7 @@ pub fn run(
             .route("/health", web::get().to(routes::health_check::health_check))
             .route("/subscriptions", web::post().to(routes::subscriptions::subscribe))
             .route("/subscriptions/confirm", web::get().to(routes::subscriptions_confirm::confirm))
+            .route("/newsletters", web::post().to(routes::newsletters::publish_newsletter))
             .app_data(connection.clone())
             .app_data(email_client.clone())
             .app_data(base_url.clone())
