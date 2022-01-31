@@ -88,6 +88,28 @@ async fn newsletters_returns_400_for_invalid_data() {
     }
 }
 
+#[tokio::test]
+async fn requests_without_authorization_are_rejected() {
+    let app = spawn_app().await;
+
+    let newsletter_body = serde_json::json!({
+        "title": "title",
+        "content": {
+            "html": "<p>html</p>",
+            "text": "text"
+        }
+    });
+    let response = reqwest::Client::new()
+        .post(format!("{}/newsletters", &app.address))
+        .json(&newsletter_body)
+        .send()
+        .await
+        .expect("failed to send request");
+
+    assert_eq!(response.status().as_u16(), 401);
+    assert_eq!(response.headers()["WWW-Authenticate"], r#"Basic realm="publish"#);
+}
+
 async fn create_unconfirmed_subscriber(app: &TestApp) -> ConfirmationLinks {
     let body = "name=Dione&email=dione%40email.com";
 
