@@ -1,4 +1,4 @@
-use actix_web::{HttpResponse, ResponseError, web};
+use actix_web::{HttpResponse, ResponseError, web, http};
 use crate::startup::DbConnectionKind;
 use std::fmt::Formatter;
 use crate::routes::error_chain_fmt;
@@ -9,6 +9,8 @@ use crate::email_client::EmailClient;
 use std::convert::TryInto;
 use crate::domain::subscriber_email::SubscriberEmail;
 use anyhow::Context;
+use secrecy::Secret;
+use std::str::FromStr;
 
 #[derive(serde::Deserialize)]
 pub struct BodyData {
@@ -25,7 +27,9 @@ pub struct Content {
 #[derive(thiserror::Error)]
 pub enum PublishError {
     #[error(transparent)]
-    UnexpectedError(#[from] anyhow::Error)
+    UnexpectedError(#[from] anyhow::Error),
+    #[error("Authentication failed.")]
+    AuthError(#[source] anyhow::Error),
 }
 
 impl std::fmt::Debug for PublishError {
@@ -37,7 +41,22 @@ impl std::fmt::Debug for PublishError {
 impl ResponseError for PublishError {
     fn status_code(&self) -> StatusCode {
         match self {
-            PublishError::UnexpectedError(_) => StatusCode::INTERNAL_SERVER_ERROR
+            PublishError::UnexpectedError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            PublishError::AuthError(_) => StatusCode::UNAUTHORIZED
+        }
+    }
+
+    fn error_response(&self) -> HttpResponse<BoxBody> {
+        match self {
+            PublishError::UnexpectedError(_) => {
+                HttpResponse::new(StatusCode::INTERNAL_SERVER_ERROR)
+            }
+            PublishError::AuthError(_) => {
+                let mut response = HttpResponse::new(StatusCode::UNAUTHORIZED);
+                let authenticate_value = http::header::HeaderValue::from_str(r#"Basic realm="publish"#).unwrap();
+                response.headers_mut().insert(http::header::WWW_AUTHENTICATE, authenticate_value);
+                response
+            }
         }
     }
 }
@@ -45,8 +64,11 @@ impl ResponseError for PublishError {
 pub async fn publish_newsletter(
     body: web::Json<BodyData>,
     database: web::Data<DbConnectionKind>,
-    email_client: web::Data<EmailClient>
+    email_client: web::Data<EmailClient>,
+    request: web::HttpRequest,
 ) -> Result<HttpResponse, PublishError> {
+    let _credentials = basic_authentication(request.headers())
+        .map_err(PublishError::AuthError)?;
     let confirmed_subscribers = get_confirmed_subscribers(&database).await?;
     for subscriber in confirmed_subscribers {
         match subscriber {
@@ -56,7 +78,6 @@ pub async fn publish_newsletter(
                     &body.title,
                     &body.content.html,
                     &body.content.text,
-
                 ).await
                     .with_context(|| {
                         format!("Failed to send newsletter issue to {}", subscriber.email)
@@ -74,6 +95,46 @@ pub async fn publish_newsletter(
     Ok(HttpResponse::Ok().finish())
 }
 
+struct Credentials {
+    username: String,
+    password: Secret<String>,
+}
+
+fn basic_authentication(headers: &http::header::HeaderMap) -> Result<Credentials, anyhow::Error> {
+    let authorization = headers
+        .get(http::header::AUTHORIZATION)
+        .context("Authorization header missing")?
+        .to_str()
+        .context("Authorization header value no valid UTF8 string")?;
+
+    let encoded_credentials = authorization
+        .strip_prefix("Basic ")
+        .context("Authorization scheme was not basic")?;
+
+    let decoded_credentials_bytes = base64::decode_config(encoded_credentials, base64::STANDARD)
+        .context("Failed to base64-decode credentials")?;
+
+    let decoded_credentials = String::from_utf8(decoded_credentials_bytes)
+        .context("Decoded credential is not valid UTF8 string")?;
+
+    let mut credentials = decoded_credentials.splitn(2, ':');
+
+    let username = credentials
+        .next()
+        .ok_or_else(|| anyhow::anyhow!("A username must be provided in 'Basic' auth"))?
+        .to_string();
+
+    let password = credentials
+        .next()
+        .ok_or_else(|| anyhow::anyhow!("A password must be provided in 'Basic' auth"))?
+        .to_string();
+
+    Ok(Credentials {
+        username,
+        password: Secret::new(password)
+    })
+}
+
 struct ConfirmedSubscriber {
     email: SubscriberEmail,
 }
@@ -86,7 +147,7 @@ async fn get_confirmed_subscribers(
     database: &DbConnectionKind
 ) -> Result<Vec<Result<ConfirmedSubscriber, anyhow::Error>>, anyhow::Error> {
     struct Row {
-        email: String
+        email: String,
     }
     let rows = sqlx::query_as!(
         Row,
