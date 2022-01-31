@@ -21,12 +21,7 @@ async fn newsletters_are_not_delivered_to_non_confirmed_subscribers() {
         }
     });
 
-    let response = reqwest::Client::new()
-        .post(format!("{}/newsletters", &app.address))
-        .json(&newsletter_request_body)
-        .send()
-        .await
-        .expect("Failed to call newsletters endpoint");
+    let response = app.post_newsletters(newsletter_request_body).await;
 
     assert_eq!(response.status().as_u16(), 200)
 }
