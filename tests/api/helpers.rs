@@ -72,13 +72,22 @@ impl TestApp {
     }
 
     pub async fn post_newsletters(&self, body: serde_json::Value) -> reqwest::Response {
+        let (username, password) = self.test_user().await;
         reqwest::Client::new()
             .post(format!("{}/newsletters", &self.address))
-            .basic_auth(Uuid::new_v4(), Some(Uuid::new_v4().to_string()))
+            .basic_auth(username, Some(password))
             .json(&body)
             .send()
             .await
             .expect("Failed to POST newsletters endpoint")
+    }
+
+    pub async fn test_user(&self) -> (String, String) {
+        let row = sqlx::query!("SELECT username, password FROM users LIMIT 1")
+            .fetch_one(&self.connection)
+            .await
+            .expect("Failed to retrieve test user");
+        (row.username, row.password)
     }
 }
 
@@ -107,12 +116,14 @@ pub async fn spawn_app() -> TestApp {
     let address = format!("http:127.0.0.1:{}", application_port);
     let _ = tokio::spawn(application.run_until_stopped());
     // We return the application address to the caller!
-    TestApp {
+    let test_app = TestApp {
         address,
         port: application_port,
         connection: get_database_connection(&configuration.database),
         email_server
-    }
+    };
+    add_test_user(&test_app.connection).await;
+    test_app
 }
 
 async fn configure_database(config: &DatabaseSettings) -> DbConnectionKind {
@@ -139,4 +150,19 @@ async fn configure_database(config: &DatabaseSettings) -> DbConnectionKind {
         .expect("Failed to migrate DB");
 
     connection_pool
+}
+
+async fn add_test_user(database: &DbConnectionKind) {
+    sqlx::query!(
+        r#"
+        INSERT INTO users (user_id, username, password)
+        VALUES ($1, $2, $3)
+        "#,
+        Uuid::new_v4(),
+        Uuid::new_v4().to_string(),
+        Uuid::new_v4().to_string(),
+    )
+        .execute(database)
+        .await
+        .expect("Failed to create test users");
 }

@@ -11,6 +11,8 @@ use crate::domain::subscriber_email::SubscriberEmail;
 use anyhow::Context;
 use secrecy::Secret;
 use std::str::FromStr;
+use uuid::Uuid;
+use secrecy::ExposeSecret;
 
 #[derive(serde::Deserialize)]
 pub struct BodyData {
@@ -61,14 +63,28 @@ impl ResponseError for PublishError {
     }
 }
 
+#[tracing::instrument(
+name = "Publish a newsletter issue",
+skip(body, database, email_client, request)
+fields(username=tracing::field::Empty, user_id=tracing::field::Empty)
+)]
 pub async fn publish_newsletter(
     body: web::Json<BodyData>,
     database: web::Data<DbConnectionKind>,
     email_client: web::Data<EmailClient>,
     request: web::HttpRequest,
 ) -> Result<HttpResponse, PublishError> {
-    let _credentials = basic_authentication(request.headers())
+    let credentials = basic_authentication(request.headers())
         .map_err(PublishError::AuthError)?;
+    tracing::Span::current().record(
+        "username",
+        &tracing::field::display(&credentials.username)
+    );
+    let user_id = validate_credentials(credentials, &database).await?;
+    tracing::Span::current().record(
+        "user_id",
+        &tracing::field::display(&user_id)
+    );
     let confirmed_subscribers = get_confirmed_subscribers(&database).await?;
     for subscriber in confirmed_subscribers {
         match subscriber {
@@ -168,4 +184,27 @@ async fn get_confirmed_subscribers(
         })
         .collect();
     Ok(confirmed_subscribers)
+}
+
+async fn validate_credentials(
+    credentials: Credentials,
+    database: &DbConnectionKind
+) -> Result<Uuid, PublishError> {
+   let user: Option<_>  = sqlx::query!(
+       r#"
+       SELECT user_id
+       FROM users
+       WHERE username = $1 AND password = $2
+       "#,
+       credentials.username,
+       credentials.password.expose_secret()
+   ).fetch_optional(database)
+       .await
+       .context("Could not find user with  provided credentials")
+       .map_err(PublishError::UnexpectedError)?;
+
+    user
+        .map(|user| user.user_id)
+        .ok_or_else(|| anyhow::anyhow!("Invalid username or password"))
+        .map_err(PublishError::AuthError)
 }
