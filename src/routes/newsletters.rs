@@ -4,17 +4,14 @@ use std::fmt::Formatter;
 use crate::routes::error_chain_fmt;
 use actix_web::http::StatusCode;
 use actix_web::body::BoxBody;
-use std::any::TypeId;
 use crate::email_client::EmailClient;
-use std::convert::TryInto;
 use crate::domain::subscriber_email::SubscriberEmail;
 use anyhow::Context;
 use secrecy::Secret;
-use std::str::FromStr;
 use uuid::Uuid;
 use secrecy::ExposeSecret;
-use sha3::Digest;
-use argon2::{Argon2, Algorithm, Version, Params, PasswordHasher, PasswordHash, PasswordVerifier};
+use argon2::{Argon2, PasswordHash, PasswordVerifier};
+use crate::telemetry::spawn_blocking_with_tracinig;
 
 #[derive(serde::Deserialize)]
 pub struct BodyData {
@@ -193,24 +190,29 @@ async fn validate_credentials(
     credentials: Credentials,
     database: &DbConnectionKind,
 ) -> Result<Uuid, PublishError> {
-    let (user_id, expected_password_hash) = get_user_credentials(credentials.username.as_str(), database)
+    let mut user_id = None;
+    let mut expected_password_hash = Secret::new(
+        "$argon2id$v=19$m=15000,t=2,p=1$\
+        gZiV/M1gPc22ElAH/Jh1Hw$\
+        CWOrkoo7oJBQ/iyh7uJ0LO2aLEfrHwTWllSAxT0zRno"
+            .to_string(),
+    );
+    if let Some((stored_user_id, stored_password_hash)) = get_user_credentials(credentials.username.as_str(), database)
         .await
         .map_err(PublishError::UnexpectedError)?
-        .ok_or_else(|| PublishError::AuthError(anyhow::anyhow!("Unknown username")))?;
+    {
+        user_id = Some(stored_user_id);
+        expected_password_hash = stored_password_hash;
+    }
 
-    let expected_password_hash = PasswordHash::new(expected_password_hash.expose_secret())
-        .context("Failed to parse hash in PHC string format")
-        .map_err(PublishError::UnexpectedError)?;
+    spawn_blocking_with_tracinig(move || {
+        verify_password_hash(expected_password_hash, credentials.password)
+    })
+        .await
+        .context("Failed to spawn block password hashing")
+        .map_err(PublishError::UnexpectedError)??;
 
-    tracing::info_span!("Verify password hash")
-        .in_scope(|| {
-            Argon2::default()
-                .verify_password(credentials.password.expose_secret().as_bytes(),
-                                 &expected_password_hash)
-        })
-        .context("Invalid password")
-        .map_err(PublishError::AuthError)?;
-    Ok(user_id)
+    user_id.ok_or_else(|| PublishError::AuthError(anyhow::anyhow!("Unknown username")))
 }
 
 #[tracing::instrument(name = "Get stored credentials", skip(username, database))]
@@ -230,4 +232,20 @@ async fn get_user_credentials(
         .context("Could not find user with  provided credentials")?
         .map(|u| (u.user_id, Secret::new(u.password_hash)));
     Ok(user)
+}
+
+#[tracing::instrument(name = "Verify password hash", skip(expected_password_hash, password_candidate))]
+fn verify_password_hash(
+    expected_password_hash: Secret<String>,
+    password_candidate: Secret<String>,
+) -> Result<(), PublishError> {
+    let expected_password_hash = PasswordHash::new(expected_password_hash.expose_secret())
+        .context("Failed to parse hash in PHC string format")
+        .map_err(PublishError::UnexpectedError)?;
+
+    Argon2::default()
+        .verify_password(password_candidate.expose_secret().as_bytes(),
+                         &expected_password_hash)
+        .context("Invalid password")
+        .map_err(PublishError::AuthError)
 }

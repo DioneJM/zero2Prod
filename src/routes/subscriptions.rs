@@ -5,16 +5,14 @@ use uuid::Uuid;
 use crate::FormData;
 use crate::startup::{DbConnectionKind, ApplicationBaseUrl};
 use crate::domain::{NewSubscriber};
-use std::convert::{TryFrom, TryInto};
+use std::convert::{TryInto};
 use crate::email_client::EmailClient;
 use rand::{thread_rng, Rng};
 use rand::distributions::Alphanumeric;
 use sqlx::{Transaction, Postgres};
 use std::fmt::{Display, Formatter};
 use std::error::Error;
-use std::any::TypeId;
 use actix_web::http::StatusCode;
-use actix_web::body::BoxBody;
 
 pub struct StoreTokenError(sqlx::Error);
 

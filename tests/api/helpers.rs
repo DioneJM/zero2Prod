@@ -5,7 +5,6 @@ use zero2prod::startup::{DbConnectionKind, Application, get_database_connection}
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use zero2prod::telemetry::{init_subscriber, get_subscriber};
 use wiremock::MockServer;
-use sha3::Digest;
 use argon2::password_hash::SaltString;
 use argon2::{Argon2, PasswordHasher};
 

@@ -1,7 +1,6 @@
 use crate::helpers::spawn_app;
-use wiremock::{Mock, ResponseTemplate, MockServer};
-use wiremock::matchers::{any, path, method};
-use reqwest::Url;
+use wiremock::{Mock, ResponseTemplate};
+use wiremock::matchers::{path, method};
 
 
 #[tokio::test]

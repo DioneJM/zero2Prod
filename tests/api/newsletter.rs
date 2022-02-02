@@ -1,6 +1,7 @@
 use crate::helpers::{spawn_app, TestApp, ConfirmationLinks};
 use wiremock::{Mock, ResponseTemplate};
 use wiremock::matchers::{any, path, method};
+use uuid::Uuid;
 
 #[tokio::test]
 async fn newsletters_are_not_delivered_to_non_confirmed_subscribers() {
@@ -49,6 +50,56 @@ async fn newsletters_are_delivered_to_confirmed_subscriber() {
     let response = app.post_newsletters(newsletter_request_body).await;
 
     assert_eq!(response.status().as_u16(), 200)
+}
+
+#[tokio::test]
+async fn non_existing_user_is_rejected() {
+    let app = spawn_app().await;
+
+    let username = Uuid::new_v4().to_string();
+    let password = Uuid::new_v4().to_string();
+
+    let response = reqwest::Client::new()
+        .post(&format!("{}/newsletters", &app.address))
+        .basic_auth(username, Some(password))
+        .json(&serde_json::json!({
+            "title": "title",
+            "content": {
+                "text": "text",
+                "html": "<p>html</p>"
+            }
+        }))
+        .send()
+        .await
+        .expect("Failed to send request");
+
+    assert_eq!(response.status().as_u16(), 401);
+    assert_eq!(response.headers()["WWW-Authenticate"], r#"Basic realm="publish"#);
+}
+
+#[tokio::test]
+async fn incorrect_password_is_rejected() {
+    let app = spawn_app().await;
+    let username = &app.test_user.username;
+    let incorrect_password = Uuid::new_v4().to_string();
+    assert_ne!(app.test_user.password, incorrect_password);
+
+    let response = reqwest::Client::new()
+        .post(&format!("{}/newsletters", &app.address))
+        .basic_auth(username, Some(incorrect_password))
+        .json(&serde_json::json!({
+            "title": "title",
+            "content": {
+                "text": "text",
+                "html": "<p>html</p>"
+            }
+        }))
+        .send()
+        .await
+        .expect("Failed to send request");
+
+    assert_eq!(response.status().as_u16(), 401);
+    assert_eq!(response.headers()["WWW-Authenticate"], r#"Basic realm="publish"#);
 }
 
 #[tokio::test]

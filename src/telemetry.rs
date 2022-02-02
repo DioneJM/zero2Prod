@@ -5,6 +5,7 @@ use tracing::subscriber::set_global_default;
 use tracing_log::LogTracer;
 use tracing::Subscriber;
 use tracing_subscriber::fmt::MakeWriter;
+use tokio::task::JoinHandle;
 
 pub fn get_subscriber<Sink>(
     name: String,
@@ -30,4 +31,13 @@ pub fn get_subscriber<Sink>(
 pub fn init_subscriber(subscriber: impl Subscriber + Send + Sync) {
     LogTracer::init().expect("Failed to set logger");
     set_global_default(subscriber).expect("Failed to set subscriber");
+}
+
+pub fn spawn_blocking_with_tracinig<F, R>(f: F) -> JoinHandle<R>
+where
+    F: FnOnce() -> R + Send + 'static,
+    R: Send + 'static,
+{
+    let current_span = tracing::Span::current();
+    actix_web::rt::task::spawn_blocking(move || current_span.in_scope(f))
 }
