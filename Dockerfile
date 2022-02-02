@@ -7,6 +7,7 @@ RUN cargo install cargo-chef
 # Go into directory `app`
 #(or create directory if it doesn't exist then enter it)
 WORKDIR /app
+RUN apt update && apt install lld clang -y
 
 # Copy all files working environment to Docker image
 FROM chef AS planner
