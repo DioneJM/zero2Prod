@@ -6,6 +6,8 @@ use sqlx::{Connection, Executor, PgConnection, PgPool};
 use zero2prod::telemetry::{init_subscriber, get_subscriber};
 use wiremock::MockServer;
 use sha3::Digest;
+use argon2::password_hash::SaltString;
+use argon2::{Argon2, PasswordHasher};
 
 static TRACING: Lazy<()> = Lazy::new(|| {
 
@@ -108,8 +110,12 @@ impl TestUser {
     }
 
     async fn store(&self, database:  &DbConnectionKind) {
-        let password_bytes = sha3::Sha3_256::digest(self.password.as_bytes());
-        let password_hash = format!("{:x}", password_bytes);
+        let salt = SaltString::generate(&mut rand::thread_rng());
+        let password_hash = Argon2::default()
+            .hash_password(self.password.as_bytes(), &salt)
+            .unwrap()
+            .to_string();
+
         sqlx::query!(
             r#"
             INSERT INTO users (user_id, username, password_hash)

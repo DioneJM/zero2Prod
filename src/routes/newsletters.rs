@@ -14,6 +14,7 @@ use std::str::FromStr;
 use uuid::Uuid;
 use secrecy::ExposeSecret;
 use sha3::Digest;
+use argon2::{Argon2, Algorithm, Version, Params, PasswordHasher, PasswordHash, PasswordVerifier};
 
 #[derive(serde::Deserialize)]
 pub struct BodyData {
@@ -67,7 +68,7 @@ impl ResponseError for PublishError {
 #[tracing::instrument(
 name = "Publish a newsletter issue",
 skip(body, database, email_client, request)
-fields(username=tracing::field::Empty, user_id=tracing::field::Empty)
+fields(username = tracing::field::Empty, user_id = tracing::field::Empty)
 )]
 pub async fn publish_newsletter(
     body: web::Json<BodyData>,
@@ -79,12 +80,12 @@ pub async fn publish_newsletter(
         .map_err(PublishError::AuthError)?;
     tracing::Span::current().record(
         "username",
-        &tracing::field::display(&credentials.username)
+        &tracing::field::display(&credentials.username),
     );
     let user_id = validate_credentials(credentials, &database).await?;
     tracing::Span::current().record(
         "user_id",
-        &tracing::field::display(&user_id)
+        &tracing::field::display(&user_id),
     );
     let confirmed_subscribers = get_confirmed_subscribers(&database).await?;
     for subscriber in confirmed_subscribers {
@@ -148,7 +149,7 @@ fn basic_authentication(headers: &http::header::HeaderMap) -> Result<Credentials
 
     Ok(Credentials {
         username,
-        password: Secret::new(password)
+        password: Secret::new(password),
     })
 }
 
@@ -189,25 +190,34 @@ async fn get_confirmed_subscribers(
 
 async fn validate_credentials(
     credentials: Credentials,
-    database: &DbConnectionKind
+    database: &DbConnectionKind,
 ) -> Result<Uuid, PublishError> {
-    let password_hash = sha3::Sha3_256::digest(credentials.password.expose_secret().as_bytes());
-    let password_hash = format!("{:x}", password_hash);
-   let user: Option<_>  = sqlx::query!(
+    let user: Option<_> = sqlx::query!(
        r#"
-       SELECT user_id
+       SELECT user_id, password_hash
        FROM users
-       WHERE username = $1 AND password_hash = $2
+       WHERE username = $1
        "#,
        credentials.username,
-       password_hash
    ).fetch_optional(database)
-       .await
-       .context("Could not find user with  provided credentials")
-       .map_err(PublishError::UnexpectedError)?;
+        .await
+        .context("Could not find user with  provided credentials")
+        .map_err(PublishError::UnexpectedError)?;
 
-    user
-        .map(|user| user.user_id)
-        .ok_or_else(|| anyhow::anyhow!("Invalid username or password"))
-        .map_err(PublishError::AuthError)
+    let (expected_password_hash, user_id) = match user {
+        Some(user) => (user.password_hash, user.user_id),
+        None => {
+            return Err(PublishError::AuthError(anyhow::anyhow!("Unkown username")));
+        }
+    };
+    let expected_password_hash = PasswordHash::new(&expected_password_hash)
+        .context("Failed to parse hash in PHC string format")
+        .map_err(PublishError::UnexpectedError)?;
+
+    Argon2::default()
+        .verify_password(credentials.password.expose_secret().as_bytes(),
+                         &expected_password_hash)
+        .context("Invalid password")
+        .map_err(PublishError::AuthError)?;
+    Ok(user_id)
 }
