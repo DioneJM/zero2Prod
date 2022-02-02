@@ -5,6 +5,7 @@ use zero2prod::startup::{DbConnectionKind, Application, get_database_connection}
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use zero2prod::telemetry::{init_subscriber, get_subscriber};
 use wiremock::MockServer;
+use sha3::Digest;
 
 static TRACING: Lazy<()> = Lazy::new(|| {
 
@@ -38,7 +39,8 @@ pub struct TestApp {
     pub address: String,
     pub connection: DbConnectionKind,
     pub email_server: MockServer,
-    pub port: u16
+    pub port: u16,
+    pub test_user: TestUser
 }
 
 impl TestApp {
@@ -72,10 +74,9 @@ impl TestApp {
     }
 
     pub async fn post_newsletters(&self, body: serde_json::Value) -> reqwest::Response {
-        let (username, password) = self.test_user().await;
         reqwest::Client::new()
             .post(format!("{}/newsletters", &self.address))
-            .basic_auth(username, Some(password))
+            .basic_auth(&self.test_user.username, Some(&self.test_user.password))
             .json(&body)
             .send()
             .await
@@ -83,11 +84,44 @@ impl TestApp {
     }
 
     pub async fn test_user(&self) -> (String, String) {
-        let row = sqlx::query!("SELECT username, password FROM users LIMIT 1")
+        let row = sqlx::query!("SELECT username, password_hash FROM users LIMIT 1")
             .fetch_one(&self.connection)
             .await
             .expect("Failed to retrieve test user");
-        (row.username, row.password)
+        (row.username, row.password_hash)
+    }
+}
+
+pub struct TestUser {
+    pub user_id: Uuid,
+    pub username: String,
+    pub password: String
+}
+
+impl TestUser {
+    pub fn generate() -> Self {
+        TestUser {
+            user_id: Uuid::new_v4(),
+            username: Uuid::new_v4().to_string(),
+            password: Uuid::new_v4().to_string(),
+        }
+    }
+
+    async fn store(&self, database:  &DbConnectionKind) {
+        let password_bytes = sha3::Sha3_256::digest(self.password.as_bytes());
+        let password_hash = format!("{:x}", password_bytes);
+        sqlx::query!(
+            r#"
+            INSERT INTO users (user_id, username, password_hash)
+            VALUES ($1, $2, $3)
+            "#,
+            self.user_id,
+            self.username,
+            password_hash
+        )
+            .execute(database)
+            .await
+            .expect("Failed to store test user");
     }
 }
 
@@ -116,13 +150,15 @@ pub async fn spawn_app() -> TestApp {
     let address = format!("http:127.0.0.1:{}", application_port);
     let _ = tokio::spawn(application.run_until_stopped());
     // We return the application address to the caller!
+    let test_user = TestUser::generate();
     let test_app = TestApp {
         address,
         port: application_port,
         connection: get_database_connection(&configuration.database),
-        email_server
+        email_server,
+        test_user
     };
-    add_test_user(&test_app.connection).await;
+    test_app.test_user.store(&test_app.connection).await;
     test_app
 }
 
@@ -150,19 +186,4 @@ async fn configure_database(config: &DatabaseSettings) -> DbConnectionKind {
         .expect("Failed to migrate DB");
 
     connection_pool
-}
-
-async fn add_test_user(database: &DbConnectionKind) {
-    sqlx::query!(
-        r#"
-        INSERT INTO users (user_id, username, password)
-        VALUES ($1, $2, $3)
-        "#,
-        Uuid::new_v4(),
-        Uuid::new_v4().to_string(),
-        Uuid::new_v4().to_string(),
-    )
-        .execute(database)
-        .await
-        .expect("Failed to create test users");
 }
