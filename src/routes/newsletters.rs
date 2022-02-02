@@ -188,36 +188,46 @@ async fn get_confirmed_subscribers(
     Ok(confirmed_subscribers)
 }
 
+#[tracing::instrument(name = "Validate credentials", skip(credentials, database))]
 async fn validate_credentials(
     credentials: Credentials,
     database: &DbConnectionKind,
 ) -> Result<Uuid, PublishError> {
-    let user: Option<_> = sqlx::query!(
+    let (user_id, expected_password_hash) = get_user_credentials(credentials.username.as_str(), database)
+        .await
+        .map_err(PublishError::UnexpectedError)?
+        .ok_or_else(|| PublishError::AuthError(anyhow::anyhow!("Unknown username")))?;
+
+    let expected_password_hash = PasswordHash::new(expected_password_hash.expose_secret())
+        .context("Failed to parse hash in PHC string format")
+        .map_err(PublishError::UnexpectedError)?;
+
+    tracing::info_span!("Verify password hash")
+        .in_scope(|| {
+            Argon2::default()
+                .verify_password(credentials.password.expose_secret().as_bytes(),
+                                 &expected_password_hash)
+        })
+        .context("Invalid password")
+        .map_err(PublishError::AuthError)?;
+    Ok(user_id)
+}
+
+#[tracing::instrument(name = "Get stored credentials", skip(username, database))]
+async fn get_user_credentials(
+    username: &str,
+    database: &DbConnectionKind,
+) -> Result<Option<(uuid::Uuid, Secret<String>)>, anyhow::Error> {
+    let user = sqlx::query!(
        r#"
        SELECT user_id, password_hash
        FROM users
        WHERE username = $1
        "#,
-       credentials.username,
+       username,
    ).fetch_optional(database)
         .await
-        .context("Could not find user with  provided credentials")
-        .map_err(PublishError::UnexpectedError)?;
-
-    let (expected_password_hash, user_id) = match user {
-        Some(user) => (user.password_hash, user.user_id),
-        None => {
-            return Err(PublishError::AuthError(anyhow::anyhow!("Unkown username")));
-        }
-    };
-    let expected_password_hash = PasswordHash::new(&expected_password_hash)
-        .context("Failed to parse hash in PHC string format")
-        .map_err(PublishError::UnexpectedError)?;
-
-    Argon2::default()
-        .verify_password(credentials.password.expose_secret().as_bytes(),
-                         &expected_password_hash)
-        .context("Invalid password")
-        .map_err(PublishError::AuthError)?;
-    Ok(user_id)
+        .context("Could not find user with  provided credentials")?
+        .map(|u| (u.user_id, Secret::new(u.password_hash)));
+    Ok(user)
 }
