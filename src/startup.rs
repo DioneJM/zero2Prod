@@ -80,6 +80,8 @@ pub fn run(
             .route("/subscriptions", web::post().to(routes::subscriptions::subscribe))
             .route("/subscriptions/confirm", web::get().to(routes::subscriptions_confirm::confirm))
             .route("/newsletters", web::post().to(routes::newsletters::publish_newsletter))
+            .route("/login", web::get().to(routes::login::get::login_form))
+            .route("/login", web::post().to(routes::login::post::login))
             .app_data(connection.clone())
             .app_data(email_client.clone())
             .app_data(base_url.clone())
