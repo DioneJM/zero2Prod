@@ -11,8 +11,12 @@ use actix_web::web::Data;
 use crate::configuration::{Settings, DatabaseSettings};
 use sqlx::postgres::PgPoolOptions;
 use crate::domain::subscriber_email::SubscriberEmail;
+use secrecy::Secret;
 
 pub type DbConnectionKind = PgPool;
+
+#[derive(Clone)]
+pub struct HmacSecret(pub Secret<String>);
 
 pub struct Application {
     port: u16,
@@ -41,7 +45,13 @@ impl Application {
         );
         let listener = TcpListener::bind(address)?;
         let port = listener.local_addr().unwrap().port();
-        let server = run(listener, db_connection_pool, email_client, config.application.base_url)?;
+        let server = run(
+            listener,
+            db_connection_pool,
+            email_client,
+            config.application.base_url,
+            config.application.hmac_secret
+        )?;
 
         Ok( Self { port, server })
     }
@@ -67,7 +77,8 @@ pub fn run(
     listener: TcpListener,
     connection: DbConnectionKind,
     email_client: EmailClient,
-    base_url: String
+    base_url: String,
+    hmac_secret: Secret<String>
 ) -> Result<Server, std::io::Error> {
     let connection = web::Data::new(connection);
     let email_client = Data::new(email_client);
@@ -85,6 +96,7 @@ pub fn run(
             .app_data(connection.clone())
             .app_data(email_client.clone())
             .app_data(base_url.clone())
+            .app_data(Data::new(HmacSecret(hmac_secret.clone())))
     })
         .listen(listener)?
         .run();
