@@ -7,6 +7,7 @@ use std::fmt::Formatter;
 use crate::routes::error_chain_fmt;
 use actix_web::error::InternalError;
 use actix_web::cookie::Cookie;
+use actix_web_flash_messages::FlashMessage;
 
 
 #[derive(serde::Deserialize)]
@@ -58,11 +59,16 @@ pub async fn login(
                 AuthError::InvalidCredentials(_) => LoginError::AuthError(e.into()),
                 AuthError::UnexpectedError(_) => LoginError::UnexpectedError(e.into())
             };
-            let response = HttpResponse::SeeOther()
-                .insert_header((LOCATION, "/login"))
-                .cookie(Cookie::new("_flash", login_error.to_string()))
-                .finish();
-            Err(InternalError::from_response(login_error, response))
+            Err(login_redirect(login_error))
         }
     }
+}
+
+// Redirect to the login page with an error message.
+fn login_redirect(e: LoginError) -> InternalError<LoginError> {
+    FlashMessage::error(e.to_string()).send();
+    let response = HttpResponse::SeeOther()
+        .insert_header((LOCATION, "/login"))
+        .finish();
+    InternalError::from_response(e, response)
 }
