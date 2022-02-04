@@ -111,6 +111,15 @@ impl TestApp {
             .expect("Failed to retrieve test user");
         (row.username, row.password_hash)
     }
+
+    pub async fn get_admin_dashboard(&self) -> reqwest::Response {
+        self.api_client
+            .get(format!("{}/admin/dashboard", &self.address))
+            .send()
+            .await
+            .expect("Failed to GET /admin/dashboard endpoint")
+
+    }
 }
 
 pub struct TestUser {

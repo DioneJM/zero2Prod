@@ -105,6 +105,7 @@ pub async fn run(
             .route("/newsletters", web::post().to(routes::newsletters::publish_newsletter))
             .route("/login", web::get().to(routes::login::get::login_form))
             .route("/login", web::post().to(routes::login::post::login))
+            .route("/admin/dashboard", web::get().to(routes::admin::dashboard::admin_dashboard))
             .app_data(connection.clone())
             .app_data(email_client.clone())
             .app_data(base_url.clone())
