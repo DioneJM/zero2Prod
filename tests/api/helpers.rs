@@ -7,6 +7,7 @@ use zero2prod::telemetry::{init_subscriber, get_subscriber};
 use wiremock::MockServer;
 use argon2::password_hash::SaltString;
 use argon2::{Argon2, PasswordHasher};
+use reqwest::Client;
 
 static TRACING: Lazy<()> = Lazy::new(|| {
     let default_filter_level = "info".to_string();
@@ -40,6 +41,7 @@ pub struct TestApp {
     pub email_server: MockServer,
     pub port: u16,
     pub test_user: TestUser,
+    pub api_client: Client
 }
 
 impl TestApp {
@@ -73,7 +75,7 @@ impl TestApp {
     }
 
     pub async fn post_newsletters(&self, body: serde_json::Value) -> reqwest::Response {
-        reqwest::Client::new()
+        self.api_client
             .post(format!("{}/newsletters", &self.address))
             .basic_auth(&self.test_user.username, Some(&self.test_user.password))
             .json(&body)
@@ -86,15 +88,20 @@ impl TestApp {
         where
             Body: serde::Serialize
     {
-        reqwest::Client::builder()
-            .redirect(reqwest::redirect::Policy::none())
-            .build()
-            .unwrap()
+        self.api_client
             .post(format!("{}/login", &self.address))
             .form(body)
             .send()
             .await
-            .expect("Failed to POST newsletters endpoint")
+            .expect("Failed to POST login endpoint")
+    }
+
+    pub async fn get_login(&self) -> reqwest::Response {
+        self.api_client
+            .get(format!("{}/login", &self.address))
+            .send()
+            .await
+            .expect("Failed to GET login endpoint")
     }
 
     pub async fn test_user(&self) -> (String, String) {
@@ -158,6 +165,12 @@ pub async fn spawn_app() -> TestApp {
         config
     };
 
+    let client = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .cookie_store(true)
+        .build()
+        .unwrap();
+
     // Create and migrate the database
     configure_database(&configuration.database).await;
 
@@ -175,6 +188,7 @@ pub async fn spawn_app() -> TestApp {
         connection: get_database_connection(&configuration.database),
         email_server,
         test_user,
+        api_client: client
     };
     test_app.test_user.store(&test_app.connection).await;
     test_app
