@@ -9,7 +9,6 @@ use argon2::password_hash::SaltString;
 use argon2::{Argon2, PasswordHasher};
 
 static TRACING: Lazy<()> = Lazy::new(|| {
-
     let default_filter_level = "info".to_string();
     let subscriber_name = "test".to_string();
 
@@ -17,23 +16,22 @@ static TRACING: Lazy<()> = Lazy::new(|| {
         let subscriber = get_subscriber(
             subscriber_name,
             default_filter_level,
-            std::io::stdout
+            std::io::stdout,
         );
         init_subscriber(subscriber);
     } else {
         let subscriber = get_subscriber(
             subscriber_name,
             default_filter_level,
-            std::io::sink
+            std::io::sink,
         );
         init_subscriber(subscriber);
     }
-
 });
 
 pub struct ConfirmationLinks {
-    pub html: reqwest:: Url,
-    pub plain_text: reqwest::Url
+    pub html: reqwest::Url,
+    pub plain_text: reqwest::Url,
 }
 
 pub struct TestApp {
@@ -41,13 +39,13 @@ pub struct TestApp {
     pub connection: DbConnectionKind,
     pub email_server: MockServer,
     pub port: u16,
-    pub test_user: TestUser
+    pub test_user: TestUser,
 }
 
 impl TestApp {
     pub fn get_confirmation_links(
         &self,
-        email_request: &wiremock::Request
+        email_request: &wiremock::Request,
     ) -> ConfirmationLinks {
         let body: serde_json::Value = serde_json::from_slice(&email_request.body).unwrap();
 
@@ -70,7 +68,7 @@ impl TestApp {
 
         ConfirmationLinks {
             html,
-            plain_text
+            plain_text,
         }
     }
 
@@ -79,6 +77,21 @@ impl TestApp {
             .post(format!("{}/newsletters", &self.address))
             .basic_auth(&self.test_user.username, Some(&self.test_user.password))
             .json(&body)
+            .send()
+            .await
+            .expect("Failed to POST newsletters endpoint")
+    }
+
+    pub async fn post_login<Body>(&self, body: &Body) -> reqwest::Response
+        where
+            Body: serde::Serialize
+    {
+        reqwest::Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .unwrap()
+            .post(format!("{}/login", &self.address))
+            .form(body)
             .send()
             .await
             .expect("Failed to POST newsletters endpoint")
@@ -96,7 +109,7 @@ impl TestApp {
 pub struct TestUser {
     pub user_id: Uuid,
     pub username: String,
-    pub password: String
+    pub password: String,
 }
 
 impl TestUser {
@@ -108,7 +121,7 @@ impl TestUser {
         }
     }
 
-    async fn store(&self, database:  &DbConnectionKind) {
+    async fn store(&self, database: &DbConnectionKind) {
         let salt = SaltString::generate(&mut rand::thread_rng());
         let password_hash = Argon2::default()
             .hash_password(self.password.as_bytes(), &salt)
@@ -161,7 +174,7 @@ pub async fn spawn_app() -> TestApp {
         port: application_port,
         connection: get_database_connection(&configuration.database),
         email_server,
-        test_user
+        test_user,
     };
     test_app.test_user.store(&test_app.connection).await;
     test_app
