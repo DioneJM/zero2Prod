@@ -16,7 +16,7 @@ actix-web = "=4.0.0-beta.19"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 serde = "1.0.115"
 config = "0.11"
-uuid = { version = "0.8.1", features = ["v4"] }
+uuid = { version = "0.8.1", features = ["v4", "serde"] }
 chrono = "0.4.15"
 tracing = { version = "0.1", features = ["log"] }
 tracing-subscriber = { version = "0.3", features = ["registry", "env-filter"] }
@@ -41,6 +41,7 @@ sha2 = "0.10.1"
 hex = "0.4"
 time = "0.2"
 actix-web-flash-messages = { version = "=0.3.0", features = ["cookies"] }
+serde_json = "1"
 
 [dependencies.actix-session]
 git = "https://github.com/LukeMathWalker/actix-extras"

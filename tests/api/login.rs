@@ -42,5 +42,14 @@ async fn redirect_to_admin_dashboard_after_login_success() {
     let response = app.get_admin_dashboard().await;
     let html_page = response.text().await.unwrap();
     assert!(html_page.contains(&format!("Welcome {}", app.test_user.username)))
+}
 
+#[tokio::test]
+async fn redirect_to_login_after_login_failure() {
+    let app = spawn_app().await;
+
+    let response = app.get_admin_dashboard().await;
+
+    assert_eq!(response.status().as_u16(), 303);
+    assert_eq!(response.headers().get("Location").unwrap(), "/login")
 }
