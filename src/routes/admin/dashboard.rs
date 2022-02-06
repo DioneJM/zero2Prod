@@ -40,7 +40,7 @@ pub async fn admin_dashboard(
 }
 
 #[tracing::instrument(name = "Get username", skip(database))]
-async fn get_username(
+pub async fn get_username(
     user_id: Uuid,
     database: &DbConnectionKind
 ) -> Result<String, anyhow::Error> {

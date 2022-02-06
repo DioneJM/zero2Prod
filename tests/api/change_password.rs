@@ -54,6 +54,59 @@ async fn new_password_fields_must_match() {
     ));
 }
 
+#[tokio::test]
+async fn current_password_must_be_valid() {
+    let app = spawn_app().await;
+    let new_password = Uuid::new_v4().to_string();
+    let incorrect_current_password = Uuid::new_v4().to_string();
+
+    app.login_with_test_user().await;
+
+    let response = app.post_change_password(&serde_json::json!({
+        "current_password": incorrect_current_password,
+        "new_password": &new_password,
+        "new_password_check": &new_password,
+    })).await;
+
+    assert_eq!(response.status().as_u16(), 303);
+    assert_eq!(response.headers().get("Location").unwrap(), "/admin/password");
+
+    // Follow redirect
+    let response = app.get_change_password().await;
+    let html_page = response.text().await.unwrap();
+
+    assert!(html_page.contains(
+        "<p><i>The current password is incorrect</i></p>"
+    ));
+
+}
+
+#[tokio::test]
+async fn new_password_cannot_be_too_short() {
+    let app = spawn_app().await;
+    let new_password = String::from("short_p");
+
+    app.login_with_test_user().await;
+
+    let response = app.post_change_password(&serde_json::json!({
+        "current_password": &app.test_user.password,
+        "new_password": &new_password,
+        "new_password_check": &new_password,
+    })).await;
+
+    assert_eq!(response.status().as_u16(), 303);
+    assert_eq!(response.headers().get("Location").unwrap(), "/admin/password");
+
+    // Follow redirect
+    let response = app.get_change_password().await;
+    let html_page = response.text().await.unwrap();
+
+    assert!(html_page.contains(
+        "<p><i>The new password must be between 12 and 128 characters long</i></p>"
+    ));
+
+}
+
 
 
 fn assert_login_redirect(response: &Response) {
