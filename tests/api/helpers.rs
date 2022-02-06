@@ -112,6 +112,13 @@ impl TestApp {
         (row.username, row.password_hash)
     }
 
+    pub async fn login_with_test_user(&self) {
+        self.post_login(&serde_json::json!({
+            "username": self.test_user.username,
+            "password": self.test_user.password
+        })).await;
+    }
+
     pub async fn get_admin_dashboard(&self) -> reqwest::Response {
         self.api_client
             .get(format!("{}/admin/dashboard", &self.address))
