@@ -108,6 +108,7 @@ pub async fn run(
             .route("/admin/dashboard", web::get().to(routes::admin::dashboard::admin_dashboard))
             .route("/admin/password", web::get().to(routes::admin::password::change_password_form))
             .route("/admin/password", web::post().to(routes::admin::password::change_password))
+            .route("/admin/logout", web::post().to(routes::admin::logout::logout))
             .app_data(connection.clone())
             .app_data(email_client.clone())
             .app_data(base_url.clone())

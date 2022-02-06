@@ -32,6 +32,16 @@ pub async fn admin_dashboard(
             </head>
             <body>
                 <p>Welcome {}!</p>
+                <p>Available actions:</p>
+                <ol>
+                    <li><a href="/admin/password">Change password</a></li>
+                    <li>
+                        <a href="javascript:document.logoutForm.submit()">Logout</a>
+                        <form name="logoutForm" action="/admin/logout" method="post" hidden>
+                            <input hidden type="submit" value="Logout">
+                        </form>
+                    </li>
+                </ol>
             </body>
             </html>
             "#,

@@ -112,11 +112,11 @@ impl TestApp {
         (row.username, row.password_hash)
     }
 
-    pub async fn login_with_test_user(&self) {
+    pub async fn login_with_test_user(&self) -> reqwest::Response {
         self.post_login(&serde_json::json!({
             "username": self.test_user.username,
             "password": self.test_user.password
-        })).await;
+        })).await
     }
 
     pub async fn get_admin_dashboard(&self) -> reqwest::Response {
@@ -147,6 +147,15 @@ impl TestApp {
             .await
             .expect("Failed to POST /admin/password endpoint")
     }
+
+    pub async fn post_logout(&self) -> reqwest::Response {
+        self.api_client
+            .post(format!("{}/admin/logout", &self.address))
+            .send()
+            .await
+            .expect("Failed to POST /admin/logout endpoint")
+    }
+
 }
 
 pub struct TestUser {
