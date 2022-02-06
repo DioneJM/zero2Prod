@@ -6,6 +6,7 @@ pub mod domain;
 pub mod email_client;
 pub mod authentication;
 pub mod session_state;
+pub mod utils;
 
 #[derive(serde::Deserialize)]
 pub struct FormData {

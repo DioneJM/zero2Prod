@@ -4,13 +4,7 @@ use crate::startup::DbConnectionKind;
 use anyhow::Context;
 use crate::session_state::TypedSession;
 use reqwest::header::LOCATION;
-
-fn e500<T>(e: T) -> actix_web::error::InternalError<T> {
-    actix_web::error::InternalError::from_response(
-        e,
-        HttpResponse::InternalServerError().finish(),
-    )
-}
+use crate::utils::e500;
 
 pub async fn admin_dashboard(
     session: TypedSession,
