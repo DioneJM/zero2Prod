@@ -94,7 +94,7 @@ pub async fn change_password(
         .await?
         .context("Failed to hash password")?;
 
-    sqlx::query!(
+    let _ = sqlx::query!(
         r#"
         UPDATE users
         SET password_hash = $1

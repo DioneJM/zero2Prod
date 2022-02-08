@@ -6,9 +6,7 @@ use crate::startup::{DbConnectionKind};
 use std::fmt::Formatter;
 use crate::routes::error_chain_fmt;
 use actix_web::error::InternalError;
-use actix_web::cookie::Cookie;
 use actix_web_flash_messages::FlashMessage;
-use actix_session::Session;
 use crate::session_state::TypedSession;
 
 
