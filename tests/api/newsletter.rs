@@ -6,6 +6,7 @@ use uuid::Uuid;
 #[tokio::test]
 async fn newsletters_are_not_delivered_to_non_confirmed_subscribers() {
     let app = spawn_app().await;
+    app.login_with_test_user().await;
     create_unconfirmed_subscriber(&app).await;
 
     Mock::given(any())
@@ -30,6 +31,7 @@ async fn newsletters_are_not_delivered_to_non_confirmed_subscribers() {
 #[tokio::test]
 async fn newsletters_are_delivered_to_confirmed_subscriber() {
     let app = spawn_app().await;
+    app.login_with_test_user().await;
     create_confirmed_subscriber(&app).await;
 
     Mock::given(path("/email"))
@@ -50,56 +52,6 @@ async fn newsletters_are_delivered_to_confirmed_subscriber() {
     let response = app.post_newsletters(newsletter_request_body).await;
 
     assert_eq!(response.status().as_u16(), 200)
-}
-
-#[tokio::test]
-async fn non_existing_user_is_rejected() {
-    let app = spawn_app().await;
-
-    let username = Uuid::new_v4().to_string();
-    let password = Uuid::new_v4().to_string();
-
-    let response = reqwest::Client::new()
-        .post(&format!("{}/admin/newsletter", &app.address))
-        .basic_auth(username, Some(password))
-        .json(&serde_json::json!({
-            "title": "title",
-            "content": {
-                "text": "text",
-                "html": "<p>html</p>"
-            }
-        }))
-        .send()
-        .await
-        .expect("Failed to send request");
-
-    assert_eq!(response.status().as_u16(), 401);
-    assert_eq!(response.headers()["WWW-Authenticate"], r#"Basic realm="publish"#);
-}
-
-#[tokio::test]
-async fn incorrect_password_is_rejected() {
-    let app = spawn_app().await;
-    let username = &app.test_user.username;
-    let incorrect_password = Uuid::new_v4().to_string();
-    assert_ne!(app.test_user.password, incorrect_password);
-
-    let response = reqwest::Client::new()
-        .post(&format!("{}/admin/newsletter", &app.address))
-        .basic_auth(username, Some(incorrect_password))
-        .json(&serde_json::json!({
-            "title": "title",
-            "content": {
-                "text": "text",
-                "html": "<p>html</p>"
-            }
-        }))
-        .send()
-        .await
-        .expect("Failed to send request");
-
-    assert_eq!(response.status().as_u16(), 401);
-    assert_eq!(response.headers()["WWW-Authenticate"], r#"Basic realm="publish"#);
 }
 
 #[tokio::test]
@@ -138,6 +90,8 @@ async fn newsletters_returns_400_for_invalid_data() {
 async fn requests_without_authorization_are_rejected() {
     let app = spawn_app().await;
 
+    // no login is performed
+
     let newsletter_body = serde_json::json!({
         "title": "title",
         "content": {
@@ -145,15 +99,10 @@ async fn requests_without_authorization_are_rejected() {
             "text": "text"
         }
     });
-    let response = reqwest::Client::new()
-        .post(format!("{}/admin/newsletter", &app.address))
-        .json(&newsletter_body)
-        .send()
-        .await
-        .expect("failed to send request");
+    let response = app.post_newsletters(newsletter_body)
+        .await;
 
-    assert_eq!(response.status().as_u16(), 401);
-    assert_eq!(response.headers()["WWW-Authenticate"], r#"Basic realm="publish"#);
+    assert_eq!(response.status().as_u16(), 303);
 }
 
 async fn create_unconfirmed_subscriber(app: &TestApp) -> ConfirmationLinks {
