@@ -12,8 +12,8 @@ use crate::routes::admin::dashboard::get_username;
 #[derive(serde::Deserialize)]
 pub struct BodyData {
     title: String,
-    htmlContent: String,
-    textContent: String,
+    html_content: String,
+    text_content: String,
 }
 
 #[derive(thiserror::Error)]
@@ -62,8 +62,8 @@ pub async fn publish_newsletter(
                 email_client.send_email(
                     &subscriber.email,
                     &form.0.title,
-                    &form.0.htmlContent,
-                    &form.0.textContent,
+                    &form.0.html_content,
+                    &form.0.text_content,
                 ).await
                     .with_context(|| {
                         format!("Failed to send newsletter issue to {}", subscriber.email)

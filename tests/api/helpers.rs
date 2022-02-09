@@ -41,7 +41,7 @@ pub struct TestApp {
     pub email_server: MockServer,
     pub port: u16,
     pub test_user: TestUser,
-    pub api_client: Client
+    pub api_client: Client,
 }
 
 impl TestApp {
@@ -74,11 +74,13 @@ impl TestApp {
         }
     }
 
-    pub async fn post_newsletters(&self, body: serde_json::Value) -> reqwest::Response {
+    pub async fn post_newsletters<Body>(&self, body: &Body) -> reqwest::Response
+        where
+            Body: serde::Serialize
+    {
         self.api_client
             .post(format!("{}/admin/newsletter", &self.address))
-            .basic_auth(&self.test_user.username, Some(&self.test_user.password))
-            .json(&body)
+            .form(body)
             .send()
             .await
             .expect("Failed to POST newsletters endpoint")
@@ -125,7 +127,6 @@ impl TestApp {
             .send()
             .await
             .expect("Failed to GET /admin/dashboard endpoint")
-
     }
 
     pub async fn get_change_password(&self) -> reqwest::Response {
@@ -155,7 +156,6 @@ impl TestApp {
             .await
             .expect("Failed to POST /admin/logout endpoint")
     }
-
 }
 
 pub struct TestUser {
@@ -233,7 +233,7 @@ pub async fn spawn_app() -> TestApp {
         connection: get_database_connection(&configuration.database),
         email_server,
         test_user,
-        api_client: client
+        api_client: client,
     };
     test_app.test_user.store(&test_app.connection).await;
     test_app
