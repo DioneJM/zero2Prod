@@ -12,13 +12,8 @@ use crate::routes::admin::dashboard::get_username;
 #[derive(serde::Deserialize)]
 pub struct BodyData {
     title: String,
-    content: Content,
-}
-
-#[derive(serde::Deserialize)]
-pub struct Content {
-    html: String,
-    text: String,
+    htmlContent: String,
+    textContent: String,
 }
 
 #[derive(thiserror::Error)]
@@ -37,11 +32,11 @@ impl std::fmt::Debug for PublishError {
 
 #[tracing::instrument(
 name = "Publish a newsletter issue",
-skip(body, database, email_client, session)
+skip(form, database, email_client, session)
 fields(username = tracing::field::Empty, user_id = tracing::field::Empty)
 )]
 pub async fn publish_newsletter(
-    body: web::Json<BodyData>,
+    form: web::Form<BodyData>,
     database: web::Data<DbConnectionKind>,
     email_client: web::Data<EmailClient>,
     session: TypedSession
@@ -66,9 +61,9 @@ pub async fn publish_newsletter(
             Ok(subscriber) => {
                 email_client.send_email(
                     &subscriber.email,
-                    &body.title,
-                    &body.content.html,
-                    &body.content.text,
+                    &form.0.title,
+                    &form.0.htmlContent,
+                    &form.0.textContent,
                 ).await
                     .with_context(|| {
                         format!("Failed to send newsletter issue to {}", subscriber.email)
