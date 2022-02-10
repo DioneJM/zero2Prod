@@ -23,7 +23,9 @@ async fn newsletters_are_not_delivered_to_non_confirmed_subscribers() {
 
     let response = app.post_newsletters(&newsletter_request_body).await;
 
-    assert_eq!(response.status().as_u16(), 200)
+    assert_eq!(response.status().as_u16(), 303);
+    assert_eq!(response.headers().get("Location").unwrap(), "/admin/newsletter");
+
 }
 
 #[tokio::test]
@@ -47,7 +49,8 @@ async fn newsletters_are_delivered_to_confirmed_subscriber() {
 
     let response = app.post_newsletters(&newsletter_request_body).await;
 
-    assert_eq!(response.status().as_u16(), 200)
+    assert_eq!(response.status().as_u16(), 303);
+    assert_eq!(response.headers().get("Location").unwrap(), "/admin/newsletter");
 }
 
 #[tokio::test]
