@@ -8,6 +8,8 @@ use anyhow::Context;
 use crate::session_state::TypedSession;
 use crate::utils::{see_other, e500};
 use crate::routes::admin::dashboard::get_username;
+use validator::HasLen;
+use actix_web_flash_messages::FlashMessage;
 
 #[derive(serde::Deserialize)]
 pub struct BodyData {
@@ -56,6 +58,7 @@ pub async fn publish_newsletter(
         &tracing::field::display(&user_id),
     );
     let confirmed_subscribers = get_confirmed_subscribers(&database).await.map_err(e500)?;
+    tracing::info!("{}", &format!("# confirmed subscribers: {}", confirmed_subscribers.length()));
     for subscriber in confirmed_subscribers {
         match subscriber {
             Ok(subscriber) => {
@@ -77,8 +80,8 @@ pub async fn publish_newsletter(
             }
         }
     }
-
-    Ok(HttpResponse::Ok().finish())
+    FlashMessage::info("Emails have been sent!").send();
+    Ok(see_other("/admin/newsletter"))
 }
 
 struct ConfirmedSubscriber {

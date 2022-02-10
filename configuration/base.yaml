@@ -9,8 +9,8 @@ database:
   password: "password"
   database_name: "newsletter"
 email_client:
-  sender_email: "dionethedeveloper@gmail.com"
-  base_url: "localhost"
-  authorization_token: "my-secret-token"
+  base_url: "https://api.postmarkapp.com"
+  sender_email: "dione.morales@students.mq.edu.au"
+  authorization_token: "POSTMARK_API_TEST"
   timeout_milliseconds: 10000
 redis_uri: "redis://127.0.0.1:6379"

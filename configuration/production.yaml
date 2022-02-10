@@ -4,5 +4,5 @@ application:
 database:
   require_ssl: true
 email_client:
-  sender_email: "https://api.postmarkapp.com"
-  base_url: "dione.morales@students.mq.edu.au"
+  base_url: "https://api.postmarkapp.com"
+  sender_email: "dione.morales@students.mq.edu.au"
