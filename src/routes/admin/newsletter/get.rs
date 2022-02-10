@@ -49,11 +49,12 @@ pub async fn newsletter_form(
                             cols=60
                             placeholder="Newsletter content"
                             name="html_content"
-                        ></textarea>information_schema
+                        ></textarea>
                     </label>
                     <br>
                     <button type="submit">Send newsletter</button>
                 </form>
+                <a href="/admin/dashboard">Dashboard</a>
             </body>
                 </html>
             "#,
