@@ -74,6 +74,14 @@ impl TestApp {
         }
     }
 
+    pub async fn get_newsletter(&self) -> reqwest::Response {
+        self.api_client
+            .get(format!("{}/admin/newsletter", &self.address))
+            .send()
+            .await
+            .expect("Failed to GET admin/newsletter endpoint")
+    }
+
     pub async fn post_newsletters<Body>(&self, body: &Body) -> reqwest::Response
         where
             Body: serde::Serialize

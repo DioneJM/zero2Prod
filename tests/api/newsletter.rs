@@ -51,6 +51,11 @@ async fn newsletters_are_delivered_to_confirmed_subscriber() {
 
     assert_eq!(response.status().as_u16(), 303);
     assert_eq!(response.headers().get("Location").unwrap(), "/admin/newsletter");
+
+    let response = app.get_newsletter().await;
+    let html_text = response.text().await.unwrap();
+
+    assert!(html_text.contains("<p><i>Emails have been sent!</i></p>"))
 }
 
 #[tokio::test]
