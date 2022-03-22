@@ -1,3 +1,4 @@
+use reqwest::Response;
 use crate::helpers::{spawn_app, TestApp, ConfirmationLinks};
 use wiremock::{Mock, ResponseTemplate};
 use wiremock::matchers::{any, path, method};
@@ -105,6 +106,39 @@ async fn requests_without_authorization_are_rejected() {
     assert_eq!(response.status().as_u16(), 303);
 }
 
+#[tokio::test]
+async fn newsletter_creation_is_idempotent() {
+    let app = spawn_app().await;
+    create_confirmed_subscriber(&app).await;
+    app.login_with_test_user().await;
+
+    Mock::given(path("/email"))
+        .and(method("POST"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(1)
+        .mount(&app.email_server)
+        .await;
+
+    let newsletter_request_body = serde_json::json!({
+        "title": "Newsletter title",
+        "text_content": "Newsletter body as plain text",
+        "html_content": "<h1>Newsletter body as html</h1>",
+        "idempotency_key": uuid::Uuid::new_v4().to_string()
+    });
+
+    let response = app.post_newsletters(&newsletter_request_body).await;
+    assert_is_redirect_to(&response, "/admin/newsletter");
+
+    let html = app.get_newsletter().await.text().await.expect("No text found");
+    assert!(html.contains("Emails have been sent!"));
+
+    let response = app.post_newsletters(&newsletter_request_body).await;
+    assert_is_redirect_to(&response, "/admin/newsletter");
+
+    let html = app.get_newsletter().await.text().await.expect("No text found");
+    assert!(html.contains("Emails have been sent!"));
+}
+
 async fn create_unconfirmed_subscriber(app: &TestApp) -> ConfirmationLinks {
     let body = "name=Dione&email=dione%40email.com";
 
@@ -143,4 +177,9 @@ async fn create_confirmed_subscriber(app: &TestApp) {
         .unwrap()
         .error_for_status()
         .unwrap();
+}
+
+fn assert_is_redirect_to(response: &Response, location: &str) {
+    assert_eq!(response.status().as_u16(), 303);
+    assert_eq!(response.headers().get("Location").unwrap(), location);
 }
