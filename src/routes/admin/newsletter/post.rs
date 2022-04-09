@@ -6,16 +6,18 @@ use crate::email_client::EmailClient;
 use crate::domain::subscriber_email::SubscriberEmail;
 use anyhow::Context;
 use crate::session_state::TypedSession;
-use crate::utils::{see_other, e500};
+use crate::utils::{see_other, e500, e400};
 use crate::routes::admin::dashboard::get_username;
 use validator::HasLen;
 use actix_web_flash_messages::FlashMessage;
+use crate::idempotency::IdempotencyKey;
 
 #[derive(serde::Deserialize)]
 pub struct BodyData {
     title: String,
     html_content: String,
     text_content: String,
+    idempotency_key: String
 }
 
 #[derive(thiserror::Error)]
@@ -43,6 +45,7 @@ pub async fn publish_newsletter(
     email_client: web::Data<EmailClient>,
     session: TypedSession
 ) -> Result<HttpResponse, actix_web::Error> {
+    let BodyData { title, html_content, text_content, idempotency_key } = form.0;
     let user_id = session.get_user_id().map_err(e500)?;
     if user_id.is_none() {
         return Ok(see_other("/login"))
@@ -57,6 +60,7 @@ pub async fn publish_newsletter(
         "user_id",
         &tracing::field::display(&user_id),
     );
+    let idempotency_key: IdempotencyKey = idempotency_key.try_into().map_err(e400)?;
     let confirmed_subscribers = get_confirmed_subscribers(&database).await.map_err(e500)?;
     tracing::info!("{}", &format!("# confirmed subscribers: {}", confirmed_subscribers.length()));
     for subscriber in confirmed_subscribers {
@@ -64,9 +68,9 @@ pub async fn publish_newsletter(
             Ok(subscriber) => {
                 email_client.send_email(
                     &subscriber.email,
-                    &form.0.title,
-                    &form.0.html_content,
-                    &form.0.text_content,
+                    &title,
+                    &html_content,
+                    &text_content,
                 ).await
                     .with_context(|| {
                         format!("Failed to send newsletter issue to {}", subscriber.email)

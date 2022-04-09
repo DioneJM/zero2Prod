@@ -16,10 +16,12 @@ async fn newsletters_are_not_delivered_to_non_confirmed_subscribers() {
         .mount(&app.email_server)
         .await;
 
+    let idempotency_key = uuid::Uuid::new_v4().to_string();
     let newsletter_request_body = serde_json::json!({
         "title": "Newsletter title",
         "text_content": "Newsletter body in plain text",
-        "html_content": "<p>Newsletter body in HTML</p>"
+        "html_content": "<p>Newsletter body in HTML</p>",
+        "idempotency_key": idempotency_key
     });
 
     let response = app.post_newsletters(&newsletter_request_body).await;
@@ -42,10 +44,12 @@ async fn newsletters_are_delivered_to_confirmed_subscriber() {
         .mount(&app.email_server)
         .await;
 
+    let idempotency_key = uuid::Uuid::new_v4().to_string();
     let newsletter_request_body = serde_json::json!({
         "title": "Newsletter title",
         "text_content": "Newsletter body in plain text",
-        "html_content": "<p>Newsletter body in HTML</p>"
+        "html_content": "<p>Newsletter body in HTML</p>",
+        "idempotency_key": idempotency_key
     });
 
     let response = app.post_newsletters(&newsletter_request_body).await;
@@ -95,10 +99,12 @@ async fn requests_without_authorization_are_rejected() {
 
     // no login is performed
 
+    let idempotency_key = uuid::Uuid::new_v4().to_string();
     let newsletter_body = serde_json::json!({
         "title": "title",
         "html_content": "<p>html</p>",
-        "text_content": "text"
+        "text_content": "text",
+        "idempotency_key": idempotency_key
     });
     let response = app.post_newsletters(&newsletter_body)
         .await;
